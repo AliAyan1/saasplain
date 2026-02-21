@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
@@ -16,11 +16,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const redirectTo = useMemo(() => {
-    if (typeof window === "undefined") return "/dashboard";
-    const params = new URLSearchParams(window.location.search);
-    return params.get("from") || "/dashboard";
-  }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -28,8 +23,14 @@ export default function LoginPage() {
 
     const DEMO_EMAIL = "demo@ecommerce.ai";
     const DEMO_PASSWORD = "123456";
+    const storedEmail = typeof window !== "undefined" ? window.localStorage.getItem("signup-email") : null;
+    const storedPassword = typeof window !== "undefined" ? window.localStorage.getItem("signup-password") : null;
 
-    if (email.trim() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+    const valid =
+      (email.trim() === DEMO_EMAIL && password === DEMO_PASSWORD) ||
+      (storedEmail && storedPassword && email.trim() === storedEmail && password === storedPassword);
+
+    if (valid) {
       setLoading(true);
       try {
         document.cookie = "mock-auth=1; path=/; max-age=86400";
@@ -37,16 +38,16 @@ export default function LoginPage() {
       } catch {
         // ignore
       }
-      router.push(redirectTo);
+      router.push("/create-bot");
       return;
     }
 
-    setError("Invalid credentials. Use demo@ecommerce.ai / 123456.");
+    setError("Invalid credentials. Sign up first or use demo@ecommerce.ai / 123456.");
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950">
-      <header className="border-b border-slate-800 bg-slate-950">
+    <div className="min-h-screen flex flex-col bg-black">
+      <header className="border-b border-slate-800 bg-black">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 text-slate-100">
             <Logo size="md" />

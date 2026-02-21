@@ -144,9 +144,11 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
         {!scrapedData && (
           <div className="mb-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            Website content has not been scraped yet. Go to{" "}
-            <span className="font-semibold">Create Bot</span> to connect a URL, or
-            continue chatting with a generic assistant.
+            <strong>No store data yet.</strong> The chatbot needs your website to be analyzed first. If you already entered a URL but saw a rate-limit or “access denied” error, the scrape didn’t complete—go to{" "}
+            <a href="/create-bot" className="font-semibold text-primary-300 underline hover:text-primary-200">
+              Connect your store
+            </a>
+            , try again or use a different URL, then come back here. You can also keep chatting with a generic assistant below.
           </div>
         )}
         {personality && (

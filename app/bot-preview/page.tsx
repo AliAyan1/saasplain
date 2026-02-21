@@ -1,7 +1,6 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { useBot } from "@/components/BotContext";
@@ -30,10 +29,8 @@ export default function BotPreviewPage() {
   const description = buildDescription(scrapedData?.url, personality);
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-[calc(100vh-80px)] bg-slate-950 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl space-y-8">
+    <AppShell>
+      <div className="mx-auto max-w-4xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-100">Preview your assistant</h1>
             <p className="mt-2 text-slate-400">
@@ -75,17 +72,21 @@ export default function BotPreviewPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button variant="secondary" onClick={() => router.push("/bot-personality")}>
+            <Button
+              variant="secondary"
+              onClick={() => router.push("/bot-personality")}
+            >
               Back to personality
             </Button>
-            <Button variant="primary" onClick={() => router.push("/test-chatbot")}>
-              Test Chatbot
+            <Button
+              variant="primary"
+              onClick={() => router.push("/integration")}
+            >
+              Continue to integration
             </Button>
           </div>
-        </div>
-      </main>
-      <Footer />
-    </>
+      </div>
+    </AppShell>
   );
 }
 

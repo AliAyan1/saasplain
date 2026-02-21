@@ -1,17 +1,14 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import ChatWidget from "@/components/ChatWidget";
 
 export default function DemoWebsitePage() {
   return (
-    <>
-      <Navbar />
-      <main className="relative min-h-[calc(100vh-80px)] bg-slate-950 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-5xl flex-col gap-8">
+    <AppShell>
+      <div className="relative mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
           <header>
             <p className="text-xs font-semibold uppercase tracking-wide text-primary-400">
               Demo storefront
@@ -64,9 +61,8 @@ export default function DemoWebsitePage() {
         </div>
 
         <ChatWidget />
-      </main>
-      <Footer />
-    </>
+      </div>
+    </AppShell>
   );
 }
 

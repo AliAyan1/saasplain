@@ -1,9 +1,9 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
+import StepIndicator from "@/components/StepIndicator";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -24,44 +24,48 @@ export default function IntegrationPage() {
   };
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-[calc(100vh-80px)] bg-slate-950 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-100">Integration</h1>
-            <p className="mt-2 text-slate-400">
-              Copy the script below to embed the widget on any ecommerce site, or open the
-              demo website we&apos;ve included for this project.
-            </p>
-          </div>
-
-          <Card className="space-y-4">
-            <h2 className="text-sm font-semibold text-slate-100">Option 1 — Copy script</h2>
-            <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-xs font-mono text-slate-100">
-              {WIDGET_SNIPPET}
-            </div>
-            <Button variant="secondary" onClick={handleCopy}>
-              {copied ? "Copied!" : "Copy Script"}
-            </Button>
-          </Card>
-
-          <Card className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-100">
-              Option 2 — View demo website
-            </h2>
-            <p className="text-sm text-slate-400">
-              We&apos;ve included a simple mock ecommerce storefront that already has the
-              chatbot widget embedded so you can show the full experience to clients.
-            </p>
-            <Button variant="primary" onClick={() => router.push("/demo-website")}>
-              Open Demo Website
-            </Button>
-          </Card>
+    <AppShell>
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
+        <StepIndicator currentStep={3} />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary-400">Step 3: Install Widget</p>
+          <h1 className="mt-2 text-3xl font-bold text-slate-100">Integration</h1>
+          <p className="mt-2 text-slate-400">
+            Copy the snippet to embed the widget, test your chatbot (AI greets first), or try it on a sample website.
+          </p>
         </div>
-      </main>
-      <Footer />
-    </>
+
+        <Card className="space-y-4">
+          <h2 className="text-sm font-semibold text-slate-100">Install snippet</h2>
+          <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-xs font-mono text-slate-100">
+            {WIDGET_SNIPPET}
+          </div>
+          <Button variant="secondary" onClick={handleCopy}>
+            {copied ? "Copied!" : "Copy Script"}
+          </Button>
+        </Card>
+
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-100">Test your chatbot</h2>
+          <p className="text-sm text-slate-400">
+            Open the chat panel. The AI will greet you first; then you can ask questions about your store.
+          </p>
+          <Button variant="primary" onClick={() => router.push("/test-chatbot")}>
+            Test Chatbot
+          </Button>
+        </Card>
+
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-100">Sample website</h2>
+          <p className="text-sm text-slate-400">
+            Try your chatbot on a mock storefront with the widget already embedded.
+          </p>
+          <Button variant="outline" onClick={() => router.push("/demo-website")}>
+            Open sample website
+          </Button>
+        </Card>
+      </div>
+    </AppShell>
   );
 }
 

@@ -11,7 +11,7 @@ export default function HomePage() {
 
       <main>
         {/* Hero */}
-        <section className="relative overflow-hidden border-b border-slate-800 bg-slate-950 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
+        <section className="relative overflow-hidden border-b border-slate-800 bg-black px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
           <div className="mx-auto max-w-7xl">
             <div className="grid gap-10 lg:grid-cols-2 lg:gap-16 lg:items-center">
               <div className="max-w-2xl">
@@ -24,9 +24,10 @@ export default function HomePage() {
                   </span>
                 </div>
                 <h1 className="text-4xl font-bold tracking-tight text-slate-100 sm:text-5xl lg:text-6xl">
-                  AI Customer Support for E-commerce{" "}
+                  AI Customer Support for E-commerce
+                  <span className="text-primary-400"> · </span>
                   <span className="bg-gradient-to-r from-primary-400 to-primary-500 bg-clip-text text-transparent">
-                    — In One Click
+                    In One Click
                   </span>
                 </h1>
                 <p className="mt-6 text-lg text-slate-400">
@@ -38,23 +39,20 @@ export default function HomePage() {
                       Start Free Trial
                     </Button>
                   </Link>
-                  <Link href="#pricing">
-                    <Button variant="outline" className="min-w-[140px]">
-                      View Pricing
-                    </Button>
-                  </Link>
                 </div>
-                <p className="mt-6 flex items-center gap-2 text-sm text-slate-500">
-                  <span className="flex -space-x-2">
-                    {[1, 2, 3].map((i) => (
-                      <span
-                        key={i}
-                        className="h-8 w-8 rounded-full border-2 border-slate-700 bg-slate-600"
-                      />
-                    ))}
-                  </span>
-                  Trusted by 2,000+ stores
-                </p>
+                <div className="mt-8 flex flex-col gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className="flex -space-x-2">
+                      {[1, 2, 3].map((i) => (
+                        <span
+                          key={i}
+                          className="h-8 w-8 rounded-full border-2 border-slate-700 bg-slate-600 flex items-center justify-center text-xs text-slate-400 font-medium"
+                        />
+                      ))}
+                    </span>
+                    <span className="text-sm text-slate-500">Trusted by 500 customers</span>
+                  </div>
+                </div>
               </div>
               <div className="relative hidden lg:block">
                 <div className="aspect-video rounded-2xl border border-slate-700 bg-slate-800/50 shadow-soft-lg flex items-center justify-center">
@@ -74,7 +72,7 @@ export default function HomePage() {
         </section>
 
         {/* How It Works */}
-        <section id="how-it-works" className="border-b border-slate-800 bg-slate-950 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <section id="how-it-works" className="border-b border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
             <p className="text-sm font-semibold uppercase tracking-wider text-primary-400">
               How It Works
@@ -162,7 +160,7 @@ export default function HomePage() {
         </section>
 
         {/* Features */}
-        <section className="border-t border-slate-800 bg-slate-950 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <section className="border-t border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
             <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl">
               Everything you need to automate
@@ -247,7 +245,7 @@ export default function HomePage() {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="border-t border-slate-800 bg-slate-900/50 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <section id="pricing" className="border-t border-slate-800 bg-slate-900/30 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
             <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl">
               Transparent pricing
@@ -255,52 +253,37 @@ export default function HomePage() {
             <p className="mt-4 text-lg text-slate-400">
               Start for free and scale as your shop grows.
             </p>
-            <div className="mt-12 grid gap-8 lg:grid-cols-3">
+            <div className="mt-12 grid gap-8 lg:grid-cols-2 max-w-4xl mx-auto">
               {[
                 {
-                  name: "Starter",
-                  sub: "Free",
+                  name: "Free",
+                  sub: "",
                   price: "$0",
                   period: "/mo",
                   features: [
                     "15 conversations/month",
                     "1 chatbot",
                     "Website scraping",
-                    "Email support",
                   ],
                   cta: "Start Free Trial",
                   variant: "outline" as const,
                   recommended: false,
                 },
                 {
-                  name: "Business",
+                  name: "Pro",
                   sub: "",
                   price: "$99",
                   period: "/mo",
                   features: [
+                    "Increased conversion",
+                    "Email support",
+                    "Standard integration (add other integrations)",
                     "500 conversations/month",
                     "Unlimited chatbots",
-                    "Voice + chat",
-                    "Priority support",
                   ],
                   cta: "Get Started",
                   variant: "primary" as const,
                   recommended: true,
-                },
-                {
-                  name: "Pro",
-                  sub: "",
-                  price: "$299",
-                  period: "/mo",
-                  features: [
-                    "Unlimited conversations",
-                    "Custom integrations",
-                    "Dedicated success manager",
-                    "SLA & compliance",
-                  ],
-                  cta: "Contact Sales",
-                  variant: "outline" as const,
-                  recommended: false,
                 },
               ].map((plan) => (
                 <Card
@@ -370,7 +353,7 @@ export default function HomePage() {
         </section>
 
         {/* CTA */}
-        <section className="border-t border-slate-800 bg-slate-950 px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <section className="border-t border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl">
               Ready to automate your store?

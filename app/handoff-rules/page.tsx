@@ -1,16 +1,13 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 
 export default function HandoffRulesPage() {
   return (
-    <>
-      <Navbar />
-      <main className="min-h-[calc(100vh-80px)] bg-slate-950 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl space-y-8">
+    <AppShell>
+      <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
           <header className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-100">Human handoff logic</h1>
@@ -71,7 +68,7 @@ export default function HandoffRulesPage() {
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 rounded-full bg-slate-950 transition-transform ${
+                      className={`inline-block h-4 w-4 rounded-full bg-black transition-transform ${
                         rule.enabled ? "translate-x-4" : "translate-x-1"
                       }`}
                     />
@@ -94,9 +91,7 @@ export default function HandoffRulesPage() {
             </div>
           </Card>
         </div>
-      </main>
-      <Footer />
-    </>
+    </AppShell>
   );
 }
 

@@ -16,18 +16,23 @@ export default function SignupPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const form = e.target as HTMLFormElement;
+    const email = (form.querySelector('input[type="email"]') as HTMLInputElement)?.value ?? "";
+    const password = (form.querySelector('input[type="password"]') as HTMLInputElement)?.value ?? "";
     try {
       document.cookie = "mock-auth=1; path=/; max-age=86400";
       window.localStorage.setItem("mock-auth", "1");
+      if (email) window.localStorage.setItem("signup-email", email);
+      if (password) window.localStorage.setItem("signup-password", password);
     } catch {
       // ignore
     }
-    router.push("/dashboard");
+    router.push("/create-bot");
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950">
-      <header className="border-b border-slate-800 bg-slate-950">
+    <div className="min-h-screen flex flex-col bg-black">
+      <header className="border-b border-slate-800 bg-black">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 text-slate-100">
             <Logo size="md" />

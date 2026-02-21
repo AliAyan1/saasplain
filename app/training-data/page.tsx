@@ -1,7 +1,6 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { useBot } from "@/components/BotContext";
@@ -16,10 +15,8 @@ export default function TrainingDataPage() {
       : null;
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-[calc(100vh-80px)] bg-slate-950 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl space-y-8">
+    <AppShell>
+      <div className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
           <header className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-100">Knowledge Engine</h1>
@@ -64,7 +61,7 @@ export default function TrainingDataPage() {
                 ].map((item) => (
                   <div
                     key={item.label}
-                    className="flex items-center justify-between rounded-lg bg-slate-950/60 px-3 py-2"
+                    className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-2"
                   >
                     <span className="text-slate-200">{item.label}</span>
                     <span
@@ -93,7 +90,7 @@ export default function TrainingDataPage() {
                   products.map((p, idx) => (
                     <div
                       key={p.name + idx.toString()}
-                      className="flex items-center justify-between rounded-lg bg-slate-950/60 px-3 py-2"
+                      className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-2"
                     >
                       <div>
                         <p className="text-slate-200">{p.name}</p>
@@ -137,9 +134,7 @@ export default function TrainingDataPage() {
             </div>
           </div>
         </div>
-      </main>
-      <Footer />
-    </>
+    </AppShell>
   );
 }
 
