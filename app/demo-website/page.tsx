@@ -58,9 +58,8 @@ export default function DemoWebsitePage() {
               </ul>
             </Card>
           </div>
-        </div>
 
-        <ChatWidget />
+          <ChatWidget />
       </div>
     </AppShell>
   );

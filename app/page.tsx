@@ -13,7 +13,7 @@ export default function HomePage() {
         {/* Hero */}
         <section className="relative overflow-hidden border-b border-slate-800 bg-black px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
           <div className="mx-auto max-w-7xl">
-            <div className="grid gap-10 lg:grid-cols-2 lg:gap-16 lg:items-center">
+            <div>
               <div className="max-w-2xl">
                 <div className="mb-6 flex flex-wrap gap-2">
                   <span className="rounded-full border border-primary-500/50 bg-primary-500/10 px-3 py-1 text-xs font-medium text-primary-400">
@@ -51,19 +51,6 @@ export default function HomePage() {
                       ))}
                     </span>
                     <span className="text-sm text-slate-500">Trusted by 500 customers</span>
-                  </div>
-                </div>
-              </div>
-              <div className="relative hidden lg:block">
-                <div className="aspect-video rounded-2xl border border-slate-700 bg-slate-800/50 shadow-soft-lg flex items-center justify-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/20">
-                    <svg
-                      className="h-8 w-8 text-primary-400"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
                   </div>
                 </div>
               </div>

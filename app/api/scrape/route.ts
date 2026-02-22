@@ -28,13 +28,13 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    async function fetchWithTimeout(): Promise<Response> {
+    const fetchWithTimeout = async (): Promise<Response> => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
       const res = await fetch(url, { ...fetchOptions, signal: controller.signal });
       clearTimeout(timeout);
       return res;
-    }
+    };
 
     let response = await fetchWithTimeout();
 
