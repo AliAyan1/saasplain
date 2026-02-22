@@ -184,9 +184,9 @@ export default function HomePage() {
                   ),
                 },
                 {
-                  title: "15 Free Conversations",
+                  title: "100 Free Conversations",
                   description:
-                    "Start with 15 free conversations per month. No credit card required.",
+                    "Start with 100 free conversations per month. No credit card required.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -248,7 +248,7 @@ export default function HomePage() {
                   price: "$0",
                   period: "/mo",
                   features: [
-                    "15 conversations/month",
+                    "100 conversations/month",
                     "1 chatbot",
                     "Website scraping",
                   ],

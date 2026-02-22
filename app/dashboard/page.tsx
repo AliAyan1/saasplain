@@ -6,7 +6,7 @@ import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { useBot } from "@/components/BotContext";
 
-const TOTAL_CONVERSATIONS = 15;
+const TOTAL_CONVERSATIONS = 100;
 
 // Mock metrics (replace with API later)
 const MOCK = {

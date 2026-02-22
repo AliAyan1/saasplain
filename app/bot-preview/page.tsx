@@ -58,7 +58,7 @@ export default function BotPreviewPage() {
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-slate-400">Plan</dt>
-                  <dd className="text-right text-primary-400">Starter (15 chats)</dd>
+                  <dd className="text-right text-primary-400">Starter (100 chats)</dd>
                 </div>
               </dl>
             </Card>

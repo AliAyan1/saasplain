@@ -71,8 +71,8 @@ function makeId(prefix: string) {
 export function BotProvider({ children }: { children: ReactNode }) {
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
   const [personality, setPersonality] = useState<Personality | null>(null);
-  // 15 total, 3 already used => 12 remaining
-  const [conversationRemaining, setConversationRemaining] = useState<number>(12);
+  // 100 total, 3 already used => 97 remaining
+  const [conversationRemaining, setConversationRemaining] = useState<number>(97);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   // Persist state client-side (still "no DB")
@@ -91,7 +91,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       setConversationRemaining(
         typeof fromStorage.conversationRemaining === "number"
           ? fromStorage.conversationRemaining
-          : 12
+          : 97
       );
       setMessages(Array.isArray(fromStorage.messages) ? fromStorage.messages : []);
     }

@@ -50,7 +50,7 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
     const question = input.trim();
     if (!question) return;
     if (conversationRemaining <= 0) {
-      setError("You have used all 15 conversations. Upgrade required.");
+      setError("You have used all 100 conversations. Upgrade required.");
       return;
     }
 
@@ -129,7 +129,7 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
             Test your ecommerce assistant
           </p>
           <p className="text-xs text-slate-400">
-            {conversationRemaining} / 15 conversations remaining in Starter plan
+            {conversationRemaining} / 100 conversations remaining in Starter plan
           </p>
         </div>
         <button

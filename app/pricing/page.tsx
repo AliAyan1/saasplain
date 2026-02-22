@@ -26,7 +26,7 @@ export default function PricingPage() {
       period: "/month",
       tagline: "Perfect for trying us out",
       features: [
-        "15 conversations per month",
+        "100 conversations per month",
         "1 chatbot",
         "Website scraping",
         "Basic support",
