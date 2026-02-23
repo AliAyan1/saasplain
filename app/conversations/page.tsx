@@ -2,6 +2,8 @@
 
 import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
+import Button from "@/components/Button";
+import { useBot, ForwardMode } from "@/components/BotContext";
 
 const SAMPLE_CONVERSATIONS = [
   {
@@ -48,6 +50,25 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function ConversationsPage() {
+  const { addForwarded, addActivity } = useBot();
+
+  const handleForward = (
+    conv: (typeof SAMPLE_CONVERSATIONS)[number],
+    mode: ForwardMode
+  ) => {
+    addForwarded({
+      conversationId: conv.id,
+      customer: conv.customer,
+      preview: conv.preview,
+      forwardedAs: mode,
+    });
+    addActivity({
+      type: "forwarded",
+      title: `Forwarded to ${mode}`,
+      detail: `${conv.customer}: ${conv.preview.slice(0, 50)}${conv.preview.length > 50 ? "…" : ""}`,
+    });
+  };
+
   return (
     <AppShell>
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -71,7 +92,25 @@ export default function ConversationsPage() {
                   </div>
                   <p className="mt-1 truncate text-sm text-slate-400">{conv.preview}</p>
                 </div>
-                <span className="shrink-0 text-xs text-slate-500">{conv.date}</span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="shrink-0 text-xs text-slate-500">{conv.date}</span>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      className="px-3 py-1 text-xs"
+                      onClick={() => handleForward(conv, "email")}
+                    >
+                      Forward to email
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="px-3 py-1 text-xs"
+                      onClick={() => handleForward(conv, "ticket")}
+                    >
+                      Forward as ticket
+                    </Button>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>

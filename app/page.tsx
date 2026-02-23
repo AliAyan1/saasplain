@@ -50,7 +50,7 @@ export default function HomePage() {
                         />
                       ))}
                     </span>
-                    <span className="text-sm text-slate-500">Trusted by 500 customers</span>
+                    <span className="text-sm text-slate-500">Trusted by 200 customers</span>
                   </div>
                 </div>
               </div>
@@ -262,6 +262,7 @@ export default function HomePage() {
                   price: "$99",
                   period: "/mo",
                   features: [
+                    "Forward full conversations to email",
                     "Increased conversion",
                     "Email support",
                     "Standard integration (add other integrations)",

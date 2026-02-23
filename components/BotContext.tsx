@@ -25,12 +25,33 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+export type ForwardMode = "email" | "ticket";
+
+export interface ForwardedConversation {
+  id: string;
+  conversationId: string;
+  customer: string;
+  preview: string;
+  forwardedAs: ForwardMode;
+  createdAt: number;
+}
+
 export interface ScrapedData {
   url: string;
   title: string;
   description: string;
   content: string;
   products?: { name: string }[];
+}
+
+export type ActivityType = "resolved" | "query" | "forwarded" | "system" | "warning";
+
+export interface ActivityItem {
+  id: string;
+  type: ActivityType;
+  title: string;
+  detail: string;
+  createdAt: number;
 }
 
 interface BotContextValue {
@@ -49,6 +70,16 @@ interface BotContextValue {
   addMessage: (msg: Omit<ChatMessage, "id" | "createdAt"> & Partial<Pick<ChatMessage, "id" | "createdAt">>) => string;
   updateMessage: (id: string, patch: Partial<Pick<ChatMessage, "content">>) => void;
   clearMessages: () => void;
+
+  forwarded: ForwardedConversation[];
+  addForwarded: (
+    item: Omit<ForwardedConversation, "id" | "createdAt"> &
+      Partial<Pick<ForwardedConversation, "id" | "createdAt">>
+  ) => string;
+  clearForwarded: () => void;
+
+  recentActivity: ActivityItem[];
+  addActivity: (item: Omit<ActivityItem, "id" | "createdAt"> & Partial<Pick<ActivityItem, "id" | "createdAt">>) => string;
 }
 
 const BotContext = createContext<BotContextValue | undefined>(undefined);
@@ -71,9 +102,11 @@ function makeId(prefix: string) {
 export function BotProvider({ children }: { children: ReactNode }) {
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
   const [personality, setPersonality] = useState<Personality | null>(null);
-  // 100 total, 3 already used => 97 remaining
-  const [conversationRemaining, setConversationRemaining] = useState<number>(97);
+  // Free plan includes 100 conversations
+  const [conversationRemaining, setConversationRemaining] = useState<number>(100);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [forwarded, setForwarded] = useState<ForwardedConversation[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
   // Persist state client-side (still "no DB")
   useEffect(() => {
@@ -83,6 +116,8 @@ export function BotProvider({ children }: { children: ReactNode }) {
       personality: Personality | null;
       conversationRemaining: number;
       messages: ChatMessage[];
+      forwarded: ForwardedConversation[];
+      recentActivity: ActivityItem[];
     }>(window.localStorage.getItem(STORAGE_KEY));
 
     if (fromStorage) {
@@ -91,9 +126,11 @@ export function BotProvider({ children }: { children: ReactNode }) {
       setConversationRemaining(
         typeof fromStorage.conversationRemaining === "number"
           ? fromStorage.conversationRemaining
-          : 97
+          : 100
       );
       setMessages(Array.isArray(fromStorage.messages) ? fromStorage.messages : []);
+      setForwarded(Array.isArray(fromStorage.forwarded) ? fromStorage.forwarded : []);
+      setRecentActivity(Array.isArray(fromStorage.recentActivity) ? fromStorage.recentActivity : []);
     }
   }, []);
 
@@ -106,9 +143,11 @@ export function BotProvider({ children }: { children: ReactNode }) {
         personality,
         conversationRemaining,
         messages,
+        forwarded,
+        recentActivity,
       })
     );
-  }, [scrapedData, personality, conversationRemaining, messages]);
+  }, [scrapedData, personality, conversationRemaining, messages, forwarded, recentActivity]);
 
   const decrementConversations = useCallback(() => {
     setConversationRemaining((prev) => (prev > 0 ? prev - 1 : 0));
@@ -135,6 +174,31 @@ export function BotProvider({ children }: { children: ReactNode }) {
 
   const clearMessages = useCallback(() => setMessages([]), []);
 
+  const addForwarded = useCallback(
+    (
+      item: Omit<ForwardedConversation, "id" | "createdAt"> &
+        Partial<Pick<ForwardedConversation, "id" | "createdAt">>
+    ) => {
+      const id = item.id ?? makeId("fwd");
+      const createdAt = item.createdAt ?? Date.now();
+      setForwarded((prev) => [...prev, { ...item, id, createdAt }]);
+      return id;
+    },
+    []
+  );
+
+  const clearForwarded = useCallback(() => setForwarded([]), []);
+
+  const addActivity = useCallback(
+    (item: Omit<ActivityItem, "id" | "createdAt"> & Partial<Pick<ActivityItem, "id" | "createdAt">>) => {
+      const id = item.id ?? makeId("act");
+      const createdAt = item.createdAt ?? Date.now();
+      setRecentActivity((prev) => [{ ...item, id, createdAt }, ...prev].slice(0, 20));
+      return id;
+    },
+    []
+  );
+
   const value = useMemo<BotContextValue>(
     () => ({
       scrapedData,
@@ -149,6 +213,11 @@ export function BotProvider({ children }: { children: ReactNode }) {
       addMessage,
       updateMessage,
       clearMessages,
+      forwarded,
+      addForwarded,
+      clearForwarded,
+      recentActivity,
+      addActivity,
     }),
     [
       scrapedData,
@@ -159,6 +228,11 @@ export function BotProvider({ children }: { children: ReactNode }) {
       addMessage,
       updateMessage,
       clearMessages,
+      forwarded,
+      addForwarded,
+      clearForwarded,
+      recentActivity,
+      addActivity,
     ]
   );
 

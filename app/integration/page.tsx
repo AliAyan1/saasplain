@@ -26,9 +26,9 @@ export default function IntegrationPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-4xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
-        <StepIndicator currentStep={3} />
+        <StepIndicator currentStep={4} />
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-primary-400">Step 3: Install Widget</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary-400">Step 4: Install Widget</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-100">Integration</h1>
           <p className="mt-2 text-slate-400">
             Copy the snippet to embed the widget, test your chatbot (AI greets first), or try it on a sample website.
@@ -50,9 +50,14 @@ export default function IntegrationPage() {
           <p className="text-sm text-slate-400">
             Open the chat panel. The AI will greet you first; then you can ask questions about your store.
           </p>
-          <Button variant="primary" onClick={() => router.push("/test-chatbot")}>
-            Test Chatbot
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="primary" onClick={() => router.push("/test-chatbot")}>
+              Test Chatbot
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/dashboard")}>
+              View live dashboard
+            </Button>
+          </div>
         </Card>
 
         <Card className="space-y-3">

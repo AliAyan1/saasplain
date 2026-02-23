@@ -2,11 +2,12 @@
 
 const STEPS = [
   { num: 1, label: "Connect Store", path: "/create-bot" },
-  { num: 2, label: "Train AI", path: "/bot-personality" },
-  { num: 3, label: "Install Widget", path: "/integration" },
+  { num: 2, label: "Website Feeds", path: "/training-data" },
+  { num: 3, label: "Train AI", path: "/bot-personality" },
+  { num: 4, label: "Install Widget", path: "/integration" },
 ] as const;
 
-export default function StepIndicator({ currentStep }: { currentStep: 1 | 2 | 3 }) {
+export default function StepIndicator({ currentStep }: { currentStep: 1 | 2 | 3 | 4 }) {
   return (
     <nav className="flex items-center justify-center gap-2 sm:gap-4 py-2">
       {STEPS.map((step) => {
@@ -31,7 +32,7 @@ export default function StepIndicator({ currentStep }: { currentStep: 1 | 2 | 3 
               {step.num}
             </span>
             <span className="hidden sm:inline">{step.label}</span>
-            {step.num < 3 && (
+            {step.num < STEPS.length && (
               <span className="mx-1 h-px w-4 bg-slate-600 sm:w-8" aria-hidden />
             )}
           </div>

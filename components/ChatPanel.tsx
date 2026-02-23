@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Button from "@/components/Button";
 import { useBot } from "@/components/BotContext";
 
@@ -18,6 +19,7 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
     clearMessages,
     conversationRemaining,
     decrementConversations,
+    addActivity,
   } = useBot();
 
   const [input, setInput] = useState("");
@@ -104,6 +106,11 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
       }
 
       decrementConversations();
+      addActivity({
+        type: "resolved",
+        title: "Chat query answered",
+        detail: question.length > 60 ? question.slice(0, 60) + "…" : question,
+      });
     } catch (err: any) {
       updateMessage(assistantId, {
         content:
@@ -123,7 +130,7 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
         compact ? "h-[420px]" : "h-[560px]"
       }`}
     >
-      <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-slate-100">
             Test your ecommerce assistant
@@ -132,13 +139,25 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
             {conversationRemaining} / 100 conversations remaining in Starter plan
           </p>
         </div>
-        <button
-          type="button"
-          onClick={clearMessages}
-          className="text-xs text-slate-400 hover:text-slate-100"
-        >
-          Clear
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/dashboard">
+            <Button variant="ghost" className="px-3 py-1.5 text-xs">
+              Dashboard
+            </Button>
+          </Link>
+          <Link href="/integration">
+            <Button variant="ghost" className="px-3 py-1.5 text-xs">
+              Integration
+            </Button>
+          </Link>
+          <button
+            type="button"
+            onClick={clearMessages}
+            className="text-xs text-slate-400 hover:text-slate-100"
+          >
+            Clear
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
@@ -179,7 +198,11 @@ export default function ChatPanel({ compact = false }: ChatPanelProps) {
                   : "bg-slate-800 text-slate-100 rounded-bl-sm"
               }`}
             >
-              <p className="whitespace-pre-wrap">{m.content}</p>
+              <p className="whitespace-pre-wrap">
+                {m.role === "assistant"
+                  ? m.content.replace(/\*+/g, "").replace(/• /g, "- ")
+                  : m.content}
+              </p>
             </div>
           </div>
         ))}

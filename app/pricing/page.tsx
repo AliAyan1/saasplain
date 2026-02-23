@@ -41,6 +41,7 @@ export default function PricingPage() {
       period: "/month",
       tagline: "For growing businesses",
       features: [
+        "Forward full conversations to email",
         "Increased conversion",
         "Email support",
         "Standard integration (add other integrations)",

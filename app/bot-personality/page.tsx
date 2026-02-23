@@ -42,10 +42,10 @@ export default function BotPersonalityPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
-        <StepIndicator currentStep={2} />
+        <StepIndicator currentStep={3} />
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-primary-400">
-            Step 2: Train AI
+            Step 3: Train AI
           </p>
           <h1 className="mt-2 text-3xl font-bold text-slate-100">
             Choose your bot personality

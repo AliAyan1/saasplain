@@ -21,7 +21,7 @@ const PROGRESS_STEPS: { key: ScanStep; label: string }[] = [
 
 export default function CreateBotPage() {
   const router = useRouter();
-  const { setScrapedData, scrapedData } = useBot();
+  const { setScrapedData, scrapedData, addActivity } = useBot();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +29,6 @@ export default function CreateBotPage() {
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [scanStep, setScanStep] = useState<ScanStep>("idle");
   const [progressPercent, setProgressPercent] = useState(0);
-  const [lastResult, setLastResult] = useState<{ title: string; description: string; content: string; products: { name: string }[] } | null>(null);
-  const [forceShowForm, setForceShowForm] = useState(false);
 
   // Simulate progress while request is in flight
   useEffect(() => {
@@ -55,7 +53,6 @@ export default function CreateBotPage() {
     e.preventDefault();
     setError(null);
     setErrorCode(null);
-    setLastResult(null);
     const trimmed = url.trim();
     if (!trimmed) {
       setError("Please enter a valid website URL.");
@@ -85,12 +82,6 @@ export default function CreateBotPage() {
 
       const data = await res.json();
       setProgressPercent(100);
-      setLastResult({
-        title: data.title || "",
-        description: data.description || "",
-        content: data.content || "",
-        products: Array.isArray(data.products) ? data.products : [],
-      });
       setScrapedData({
         url: trimmed,
         title: data.title || "",
@@ -98,6 +89,12 @@ export default function CreateBotPage() {
         content: data.content || "",
         products: Array.isArray(data.products) ? data.products : [],
       });
+      addActivity({
+        type: "system",
+        title: "Website connected",
+        detail: `AI updated with content from ${trimmed.replace(/^https?:\/\//, "").split("/")[0]}`,
+      });
+      router.push("/training-data");
     } catch (err: unknown) {
       setScanStep("error");
       setError(err instanceof Error ? err.message : "Something went wrong while scraping the website.");
@@ -105,12 +102,6 @@ export default function CreateBotPage() {
       setLoading(false);
     }
   };
-
-  const hasResult = !!lastResult;
-  const showProductList = hasResult && lastResult!.products && lastResult!.products.length > 0;
-  const showForm = ((!hasResult && !loading && !scrapedData) || (forceShowForm && !loading));
-  const showContinueOnly = hasResult && !loading && !showProductList;
-  const showAlreadyConnected = scrapedData && !lastResult && !loading && !forceShowForm;
 
   return (
     <AppShell>
@@ -127,75 +118,73 @@ export default function CreateBotPage() {
           </p>
         </div>
 
-        {showForm && (
-          <Card className="mt-6 space-y-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">
-                  Website URL
-                </label>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <Input
-                    ref={urlInputRef}
-                    type="url"
-                    placeholder="https://yourstore.com"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    variant="primary"
-                    className="shrink-0"
-                  >
-                    {loading ? "Analyzing…" : "Analyze Website"}
-                  </Button>
-                </div>
+        <Card className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-300">
+                Website URL
+              </label>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Input
+                  ref={urlInputRef}
+                  type="url"
+                  placeholder="https://yourstore.com"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  variant="primary"
+                  className="shrink-0"
+                >
+                  {loading ? "Analyzing…" : "Analyze Website"}
+                </Button>
               </div>
-              {error && (
-                <div className="rounded-lg border border-red-900/40 bg-red-950/40 px-3 py-3">
-                  <p className="text-sm text-red-400">{error}</p>
-                  {errorCode === "RATE_LIMIT" && (
-                    <p className="mt-2 text-xs text-red-300/90">
-                      Waiting 1–2 minutes then retrying often helps.
-                    </p>
-                  )}
+            </div>
+            {error && (
+              <div className="rounded-lg border border-red-900/40 bg-red-950/40 px-3 py-3">
+                <p className="text-sm text-red-400">{error}</p>
+                {errorCode === "RATE_LIMIT" && (
+                  <p className="mt-2 text-xs text-red-300/90">
+                    Waiting 1–2 minutes then retrying often helps.
+                  </p>
+                )}
+                {errorCode === "ACCESS_DENIED" && (
+                  <p className="mt-2 text-xs text-red-300/90">
+                    Use another store URL; this one blocks automated access.
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-red-800 text-red-300 hover:bg-red-900/40"
+                    onClick={() => handleSubmit({ preventDefault: () => {} } as FormEvent)}
+                  >
+                    Try again
+                  </Button>
                   {errorCode === "ACCESS_DENIED" && (
-                    <p className="mt-2 text-xs text-red-300/90">
-                      Use another store URL; this one blocks automated access.
-                    </p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      variant="outline"
-                      className="border-red-800 text-red-300 hover:bg-red-900/40"
-                      onClick={() => handleSubmit({ preventDefault: () => {} } as FormEvent)}
+                      variant="ghost"
+                      className="text-red-300 hover:bg-red-900/40"
+                      onClick={() => {
+                        setError(null);
+                        setErrorCode(null);
+                        urlInputRef.current?.focus();
+                        urlInputRef.current?.select();
+                      }}
                     >
-                      Try again
+                      Try a different URL
                     </Button>
-                    {errorCode === "ACCESS_DENIED" && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="text-red-300 hover:bg-red-900/40"
-                        onClick={() => {
-                          setError(null);
-                          setErrorCode(null);
-                          urlInputRef.current?.focus();
-                          urlInputRef.current?.select();
-                        }}
-                      >
-                        Try a different URL
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
-              )}
-            </form>
-          </Card>
-        )}
+              </div>
+            )}
+          </form>
+        </Card>
 
         {loading && (
           <Card className="mt-6 space-y-4">
@@ -230,64 +219,29 @@ export default function CreateBotPage() {
             </ul>
           </Card>
         )}
-
-        {(showProductList || showContinueOnly) && lastResult && (
-          <div className="mt-8 space-y-6">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Product feed & data — synced just now
-            </p>
-            <Card>
-              <h2 className="text-sm font-semibold text-slate-200">Product feed & data</h2>
-              {showProductList && lastResult.products.length > 0 ? (
-                <>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {lastResult.products.length} product{lastResult.products.length !== 1 ? "s" : ""} detected. Data is saved and updates in real time.
-                  </p>
-                  <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-2">
-                    {lastResult.products.slice(0, 20).map((p, i) => (
-                      <li
-                        key={`${p.name}-${i}`}
-                        className="flex items-center justify-between rounded-lg bg-slate-800/60 px-3 py-2 text-sm"
-                      >
-                        <span className="text-slate-200">{p.name}</span>
-                        <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400">
-                          Active
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  {lastResult.products.length > 20 && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      + {lastResult.products.length - 20} more
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div className="mt-4 rounded-lg border border-slate-600 bg-slate-800/40 py-8 text-center">
-                  <p className="text-slate-400">No products found</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Website content was saved. You can continue to step 2 to train your chatbot.
-                  </p>
-                </div>
-              )}
-            </Card>
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={() => router.push("/bot-personality")}>
-                Continue to step 2
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {showAlreadyConnected && (
+        {scrapedData && !loading && (
           <Card className="mt-6">
-            <p className="text-slate-400">Store already connected: <span className="font-medium text-slate-200">{scrapedData!.url}</span></p>
-            <p className="mt-2 text-sm text-slate-500">{scrapedData!.products?.length ?? 0} products in knowledge base. Data persists when you refresh.</p>
-            <div className="mt-4 flex gap-3">
-              <Button variant="primary" onClick={() => router.push("/bot-personality")}>
-                Continue to Training
+            <p className="text-slate-400">
+              Store already connected:{" "}
+              <span className="font-medium text-slate-200">{scrapedData.url}</span>
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              {scrapedData.products?.length ?? 0} products detected. Website content is stored
+              locally for this demo session (no database yet).
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button variant="primary" onClick={() => router.push("/training-data")}>
+                View website feeds
               </Button>
-              <Button variant="outline" onClick={() => { setUrl(""); setLastResult(null); setError(null); setForceShowForm(true); }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setUrl("");
+                  setError(null);
+                  setErrorCode(null);
+                  urlInputRef.current?.focus();
+                }}
+              >
                 Analyze another URL
               </Button>
             </div>

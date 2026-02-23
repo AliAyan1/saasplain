@@ -11,7 +11,6 @@ const MAIN_MENU = [
 ] as const;
 
 const CONFIG = [
-  { href: "/handoff-rules", label: "Handoff Rules", icon: "rules" },
   { href: "/settings", label: "Settings", icon: "settings" },
   { href: "/admin", label: "Admin", icon: "admin" },
 ] as const;
