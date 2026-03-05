@@ -64,7 +64,14 @@ export async function POST(req: NextRequest) {
       user: { id: userId, email, name, plan: "free" },
     });
   } catch (err) {
-    console.error("Signup error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Signup error:", message, err);
+    if (message.includes("ECONNREFUSED") || message.includes("connect")) {
+      return NextResponse.json(
+        { error: "Database is unreachable. Check your database is running and Vercel env vars (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME) are set." },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { error: "Signup failed. Try again." },
       { status: 500 }

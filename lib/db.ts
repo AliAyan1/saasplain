@@ -11,6 +11,11 @@ function getDbConfig() {
 }
 
 export async function getDbConnection() {
+  // Railway (and others) give a single URL: MYSQL_URL or DATABASE_URL
+  const url = process.env.MYSQL_URL || process.env.DATABASE_URL;
+  if (url) {
+    return mysql.createConnection(url);
+  }
   const config = getDbConfig();
   return mysql.createConnection({
     host: config.host,

@@ -1,0 +1,130 @@
+-- Run this in Railway MySQL (Connect → use Query/Console, or run via mysql client).
+-- Railway already has a database; run these table statements there.
+
+-- USERS
+CREATE TABLE IF NOT EXISTS users (
+  id              CHAR(36) PRIMARY KEY,
+  email           VARCHAR(255) NOT NULL UNIQUE,
+  password_hash   VARCHAR(255) NOT NULL,
+  name            VARCHAR(255) DEFAULT NULL,
+  plan            ENUM('free', 'pro') DEFAULT 'free',
+  store_type      ENUM('shopify', 'woocommerce', 'custom') DEFAULT NULL,
+  conversation_limit INT DEFAULT 100,
+  forward_email   VARCHAR(255) DEFAULT NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_users_email (email),
+  INDEX idx_users_plan (plan),
+  INDEX idx_users_store_type (store_type)
+);
+
+-- CHATBOTS
+CREATE TABLE IF NOT EXISTS chatbots (
+  id              CHAR(36) PRIMARY KEY,
+  user_id         CHAR(36) NOT NULL,
+  name            VARCHAR(255) DEFAULT 'My Chatbot',
+  website_url     VARCHAR(500) NOT NULL,
+  website_title   VARCHAR(500) DEFAULT NULL,
+  website_description TEXT DEFAULT NULL,
+  website_content LONGTEXT DEFAULT NULL,
+  products_json   JSON DEFAULT NULL,
+  personality     ENUM('Friendly', 'Professional', 'Sales-focused', 'Premium Luxury') DEFAULT 'Friendly',
+  widget_snippet  TEXT DEFAULT NULL,
+  is_active       TINYINT(1) DEFAULT 1,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_chatbots_user (user_id),
+  INDEX idx_chatbots_active (is_active)
+);
+
+-- CONVERSATIONS
+CREATE TABLE IF NOT EXISTS conversations (
+  id              CHAR(36) PRIMARY KEY,
+  chatbot_id      CHAR(36) NOT NULL,
+  customer_email  VARCHAR(255) DEFAULT NULL,
+  customer_name   VARCHAR(255) DEFAULT NULL,
+  status          ENUM('open', 'resolved', 'forwarded') DEFAULT 'open',
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (chatbot_id) REFERENCES chatbots(id) ON DELETE CASCADE,
+  INDEX idx_conversations_chatbot (chatbot_id),
+  INDEX idx_conversations_created (created_at)
+);
+
+-- CHAT_MESSAGES
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id              CHAR(36) PRIMARY KEY,
+  conversation_id CHAR(36) NOT NULL,
+  role            ENUM('user', 'assistant') NOT NULL,
+  content         TEXT NOT NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  INDEX idx_messages_conversation (conversation_id)
+);
+
+-- FORWARDED_CONVERSATIONS
+CREATE TABLE IF NOT EXISTS forwarded_conversations (
+  id              CHAR(36) PRIMARY KEY,
+  user_id         CHAR(36) NOT NULL,
+  conversation_id CHAR(36) NOT NULL,
+  customer        VARCHAR(255) DEFAULT NULL,
+  customer_email  VARCHAR(255) DEFAULT NULL,
+  preview         TEXT DEFAULT NULL,
+  forwarded_as    ENUM('email', 'ticket') NOT NULL DEFAULT 'email',
+  ticket_ref      VARCHAR(100) DEFAULT NULL,
+  reply_text      TEXT DEFAULT NULL,
+  replied_at      TIMESTAMP NULL DEFAULT NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_forwarded_user (user_id),
+  INDEX idx_forwarded_created (created_at),
+  INDEX idx_forwarded_conversation (conversation_id)
+);
+
+-- ACTIVITY_LOG
+CREATE TABLE IF NOT EXISTS activity_log (
+  id              CHAR(36) PRIMARY KEY,
+  user_id         CHAR(36) NOT NULL,
+  chatbot_id      CHAR(36) DEFAULT NULL,
+  type            ENUM('resolved', 'query', 'forwarded', 'system', 'warning') NOT NULL,
+  title           VARCHAR(255) NOT NULL,
+  detail          TEXT DEFAULT NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (chatbot_id) REFERENCES chatbots(id) ON DELETE SET NULL,
+  INDEX idx_activity_user (user_id),
+  INDEX idx_activity_created (created_at)
+);
+
+-- TICKETS
+CREATE TABLE IF NOT EXISTS tickets (
+  id              CHAR(36) PRIMARY KEY,
+  user_id         CHAR(36) NOT NULL,
+  conversation_id CHAR(36) DEFAULT NULL,
+  ticket_ref      VARCHAR(50) NOT NULL,
+  type            ENUM('ai_resolved', 'forwarded_email', 'forwarded_human', 'database_check', 'escalated', 'other') NOT NULL,
+  customer        VARCHAR(255) DEFAULT NULL,
+  query_preview   TEXT DEFAULT NULL,
+  outcome         TEXT DEFAULT NULL,
+  status          ENUM('open', 'resolved', 'in_progress') DEFAULT 'open',
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_ticket_ref (ticket_ref),
+  INDEX idx_tickets_user (user_id),
+  INDEX idx_tickets_conversation (conversation_id),
+  INDEX idx_tickets_type (type),
+  INDEX idx_tickets_created (created_at)
+);
+
+-- CONVERSATION_USAGE
+CREATE TABLE IF NOT EXISTS conversation_usage (
+  id              CHAR(36) PRIMARY KEY,
+  user_id         CHAR(36) NOT NULL,
+  period_month    CHAR(7) NOT NULL,
+  count_used      INT DEFAULT 0,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_usage_user_period (user_id, period_month),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_usage_user (user_id)
+);
