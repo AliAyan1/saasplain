@@ -64,7 +64,7 @@ export default function HeroSection() {
                   />
                 ))}
               </span>
-              <span className="text-sm text-slate-500">Trusted by 200 customers</span>
+              <span className="text-sm text-slate-500">Trusted by 200+ customers</span>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-6">
               <div className="flex items-center gap-2 transition-transform hover:scale-105">
