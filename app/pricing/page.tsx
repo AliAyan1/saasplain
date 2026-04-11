@@ -90,7 +90,7 @@ export default function PricingPage() {
               {PLANS.map((plan) => (
                 <Card
                   key={plan.id}
-                  className={`relative flex flex-col overflow-hidden ${
+                  className={`relative flex h-full flex-col overflow-hidden ${
                     plan.recommended
                       ? "ring-2 ring-primary-500 shadow-soft-lg bg-slate-800/80 border-primary-500/50"
                       : "border-slate-700 bg-slate-800/60"
@@ -114,7 +114,7 @@ export default function PricingPage() {
                       {plan.period && <span className="text-slate-500">{plan.period}</span>}
                     </div>
                   </div>
-                  <ul className="flex-1 space-y-3 py-6 border-t border-slate-700">
+                  <ul className="space-y-3 border-t border-slate-700 py-6">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-3 text-slate-300">
                         <CheckIcon />
@@ -122,7 +122,7 @@ export default function PricingPage() {
                       </li>
                     ))}
                   </ul>
-                  <div className="pt-4">
+                  <div className="mt-auto pt-4">
                     <Link href={plan.href} className="block">
                       <Button
                         variant={plan.variant}

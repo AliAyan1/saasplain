@@ -7,6 +7,7 @@ import Button from "@/components/Button";
 import StepIndicator from "@/components/StepIndicator";
 import { useBot, Personality } from "@/components/BotContext";
 import { useRouter } from "next/navigation";
+import { DEFAULT_WIDGET_ACCENT, normalizeWidgetAccentColor } from "@/lib/widget-color";
 
 const PERSONALITIES: { id: Personality; title: string; description: string }[] = [
   {
@@ -52,6 +53,7 @@ export default function BotPersonalityPage() {
   const { scrapedData, personality, setPersonality, chatbotId } = useBot();
   const [guardRails, setGuardRails] = useState("");
   const [language, setLanguage] = useState("en");
+  const [widgetAccentColor, setWidgetAccentColor] = useState(DEFAULT_WIDGET_ACCENT);
 
   useEffect(() => {
     const q = chatbotId ? `?storeId=${encodeURIComponent(chatbotId)}` : "";
@@ -61,6 +63,10 @@ export default function BotPersonalityPage() {
         if (data.chatbot?.personality) setPersonality(data.chatbot.personality);
         if (typeof data.chatbot?.guardRails === "string") setGuardRails(data.chatbot.guardRails);
         if (data.chatbot?.language) setLanguage(data.chatbot.language);
+        const w = data.chatbot?.widgetAccentColor;
+        if (typeof w === "string" && normalizeWidgetAccentColor(w)) {
+          setWidgetAccentColor(normalizeWidgetAccentColor(w)!);
+        }
       })
       .catch(() => {});
   }, [setPersonality, chatbotId]);
@@ -88,6 +94,7 @@ export default function BotPersonalityPage() {
   };
 
   const handleContinue = async () => {
+    const accent = normalizeWidgetAccentColor(widgetAccentColor) ?? DEFAULT_WIDGET_ACCENT;
     try {
       await fetch("/api/chatbots/me", {
         method: "PATCH",
@@ -96,6 +103,7 @@ export default function BotPersonalityPage() {
           personality: personality || undefined,
           guardRails,
           language,
+          widgetAccentColor: accent,
           ...(chatbotId ? { chatbotId } : {}),
         }),
       });
@@ -191,9 +199,34 @@ export default function BotPersonalityPage() {
           />
         </Card>
 
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-100">Widget colour</h2>
+          <p className="text-xs text-slate-400">
+            Colour of the floating chat button and send button in your site snippet. Choose any colour. Paid plans
+            remove &quot;Powered by Plainbot&quot; from the widget; your accent still applies on every plan.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="color"
+              value={normalizeWidgetAccentColor(widgetAccentColor) ?? DEFAULT_WIDGET_ACCENT}
+              onChange={(e) => setWidgetAccentColor(e.target.value)}
+              className="h-11 w-16 cursor-pointer rounded border border-slate-600 bg-slate-900 p-1"
+              aria-label="Widget accent colour"
+            />
+            <input
+              type="text"
+              value={widgetAccentColor}
+              onChange={(e) => setWidgetAccentColor(e.target.value)}
+              placeholder="#f97316"
+              spellCheck={false}
+              className="w-40 rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:border-primary-500 focus:outline-none"
+            />
+          </div>
+        </Card>
+
         <div className="flex items-center justify-between">
           <p className="text-xs text-slate-500">
-            You can change personality and guard raises later without re-scraping your website.
+            You can change personality, guard raises, and widget colour later without re-scraping your website.
           </p>
           <Button
             variant="outline"

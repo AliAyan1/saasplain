@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthFromCookie } from "@/lib/auth";
 import { getDbConnection } from "@/lib/db";
 import { storeLimitForPlan } from "@/lib/plans";
+import { normalizeWidgetAccentColor } from "@/lib/widget-color";
 
 type Personality = "Friendly" | "Professional" | "Sales-focused" | "Premium Luxury";
 
@@ -16,6 +17,7 @@ type BotRow = {
   personality: Personality;
   language?: string | null;
   guardRails: string | null;
+  widgetAccentColor?: string | null;
   isActive: number;
   createdAt: Date;
 };
@@ -44,6 +46,7 @@ function toChatbotResponse(c: BotRow) {
     personality: c.personality,
     language: c.language ?? "en",
     guardRails: c.guardRails ?? "",
+    widgetAccentColor: c.widgetAccentColor ?? null,
     isActive: !!c.isActive,
     createdAt: c.createdAt,
   };
@@ -81,6 +84,7 @@ export async function GET(req: NextRequest) {
         `SELECT id, name, website_url AS websiteUrl, website_title AS websiteTitle,
          website_description AS websiteDescription, website_content AS websiteContent,
          products_json AS productsJson, personality, language, guard_rails AS guardRails,
+         widget_accent_color AS widgetAccentColor,
          is_active AS isActive, created_at AS createdAt
          FROM chatbots WHERE user_id = ? ORDER BY created_at DESC`,
         [auth.userId]
@@ -97,7 +101,12 @@ export async function GET(req: NextRequest) {
           [auth.userId]
         );
         const rawRows = (Array.isArray(raw) ? raw : []) as Record<string, unknown>[];
-        list = rawRows.map((r) => ({ ...r, guardRails: "", language: "en" })) as BotRow[];
+        list = rawRows.map((r) => ({
+          ...r,
+          guardRails: "",
+          language: "en",
+          widgetAccentColor: null,
+        })) as BotRow[];
       } else throw err;
     }
 
@@ -158,6 +167,23 @@ export async function PATCH(req: NextRequest) {
     const language = typeof body.language === "string" ? body.language.trim().slice(0, 20) : null;
     const guardRails = typeof body.guardRails === "string" ? body.guardRails.trim() : null;
 
+    let widgetAccentColorUpdate: string | null | undefined = undefined;
+    if (Object.prototype.hasOwnProperty.call(body, "widgetAccentColor")) {
+      const raw = (body as { widgetAccentColor?: unknown }).widgetAccentColor;
+      if (raw === null || raw === "") {
+        widgetAccentColorUpdate = null;
+      } else if (typeof raw === "string") {
+        const n = normalizeWidgetAccentColor(raw);
+        if (!n) {
+          return NextResponse.json(
+            { error: "Invalid widget colour. Use #RGB or #RRGGBB (e.g. #2563eb)." },
+            { status: 400 }
+          );
+        }
+        widgetAccentColorUpdate = n;
+      }
+    }
+
     const conn = await getDbConnection();
 
     let chatbotId = targetChatbotId;
@@ -201,6 +227,10 @@ export async function PATCH(req: NextRequest) {
       updates.push("language = ?");
       values.push(language || "en");
     }
+    if (widgetAccentColorUpdate !== undefined) {
+      updates.push("widget_accent_color = ?");
+      values.push(widgetAccentColorUpdate);
+    }
     if (updates.length === 0) {
       await conn.end();
       return NextResponse.json({ chatbot: null });
@@ -211,15 +241,15 @@ export async function PATCH(req: NextRequest) {
     } catch (err: unknown) {
       const e = err as { code?: string };
       if (e?.code === "ER_BAD_FIELD_ERROR") {
-        for (const col of ["guard_rails = ?", "language = ?"]) {
+        const strippable = ["widget_accent_color = ?", "guard_rails = ?", "language = ?"];
+        for (const col of strippable) {
           const idx = updates.indexOf(col);
           if (idx !== -1) {
             updates.splice(idx, 1);
             values.splice(idx, 1);
-            values[values.length - 1] = chatbotId;
-            break;
           }
         }
+        values[values.length - 1] = chatbotId;
         if (updates.length > 0) {
           await conn.execute(`UPDATE chatbots SET ${updates.join(", ")} WHERE id = ?`, values);
         }

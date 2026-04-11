@@ -97,16 +97,21 @@ async function run() {
     }
 
     // 005: plan enum add 'custom' (free | pro | custom)
+    // Never narrow an enum that already lists growth/agency — that would invalidate existing rows ("Data truncated").
     const [planColRows] = await conn.execute(
       "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'plan'",
       [database]
     );
     const planRow = Array.isArray(planColRows) && planColRows[0] ? planColRows[0] : null;
     const planType = planRow ? String(planRow.COLUMN_TYPE || planRow.column_type || "").toLowerCase() : "";
-    if (planType && planType.indexOf("custom") === -1) {
+    const alreadyHasGrowthOrAgency =
+      planType.indexOf("growth") !== -1 || planType.indexOf("agency") !== -1;
+    if (planType && planType.indexOf("custom") === -1 && !alreadyHasGrowthOrAgency) {
       console.log("Adding 'custom' to users.plan enum...");
       await conn.execute("ALTER TABLE users MODIFY COLUMN plan ENUM('free','pro','custom') DEFAULT 'free'");
       console.log("  OK");
+    } else if (alreadyHasGrowthOrAgency && planType.indexOf("custom") === -1) {
+      console.log("users.plan already includes growth/agency — skip legacy 'add custom' step (would drop those values).");
     } else {
       console.log("users.plan already has 'custom', skip.");
     }
@@ -258,6 +263,17 @@ async function run() {
       console.log("  OK");
     } else {
       console.log("chatbots.language already exists, skip.");
+    }
+
+    // chatbots.widget_accent_color (embed: floating button & send — any hex)
+    if (!(await hasColumn(conn, "chatbots", "widget_accent_color"))) {
+      console.log("Adding chatbots.widget_accent_color...");
+      await conn.execute(
+        "ALTER TABLE chatbots ADD COLUMN widget_accent_color VARCHAR(7) DEFAULT NULL"
+      );
+      console.log("  OK");
+    } else {
+      console.log("chatbots.widget_accent_color already exists, skip.");
     }
 
     // conversation_usage (per-user per-month count for limits)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbConnection } from "@/lib/db";
 import { normalizePlanParam, planHasPaidConversationTier } from "@/lib/plans";
+import { resolvedWidgetAccentColor } from "@/lib/widget-color";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,31 +56,58 @@ export async function GET(req: NextRequest) {
   const chatbotId = req.nextUrl.searchParams.get("chatbotId")?.trim();
   if (!chatbotId) {
     return NextResponse.json(
-      { error: "chatbotId required", headerTitle: "Plainbot", showPoweredBy: true },
+      {
+        error: "chatbotId required",
+        headerTitle: "Plainbot",
+        showPoweredBy: true,
+        accentColor: resolvedWidgetAccentColor(null),
+      },
       { status: 400, headers: corsHeaders }
     );
   }
 
   try {
     const conn = await getDbConnection();
-    const [rows] = await conn.execute(
-      `SELECT c.name AS name, c.website_title AS websiteTitle, c.website_url AS websiteUrl, u.plan AS plan
-       FROM chatbots c
-       INNER JOIN users u ON u.id = c.user_id
-       WHERE c.id = ? AND c.is_active = 1`,
-      [chatbotId]
-    );
-    await conn.end();
-
-    const row = (rows as {
+    type Row = {
       name?: string | null;
       websiteTitle?: string | null;
       websiteUrl?: string | null;
       plan?: string | null;
-    }[])[0];
+      widgetAccentColor?: string | null;
+    };
+    let rows: Row[];
+    try {
+      const [r] = await conn.execute(
+        `SELECT c.name AS name, c.website_title AS websiteTitle, c.website_url AS websiteUrl,
+                c.widget_accent_color AS widgetAccentColor, u.plan AS plan
+         FROM chatbots c
+         INNER JOIN users u ON u.id = c.user_id
+         WHERE c.id = ? AND c.is_active = 1`,
+        [chatbotId]
+      );
+      rows = (Array.isArray(r) ? r : []) as Row[];
+    } catch (err: unknown) {
+      const e = err as { code?: string };
+      if (e?.code !== "ER_BAD_FIELD_ERROR") throw err;
+      const [r] = await conn.execute(
+        `SELECT c.name AS name, c.website_title AS websiteTitle, c.website_url AS websiteUrl, u.plan AS plan
+         FROM chatbots c
+         INNER JOIN users u ON u.id = c.user_id
+         WHERE c.id = ? AND c.is_active = 1`,
+        [chatbotId]
+      );
+      rows = (Array.isArray(r) ? r : []) as Row[];
+    }
+    await conn.end();
+
+    const row = rows[0];
     if (!row) {
       return NextResponse.json(
-        { headerTitle: "Plainbot", showPoweredBy: true },
+        {
+          headerTitle: "Plainbot",
+          showPoweredBy: true,
+          accentColor: resolvedWidgetAccentColor(null),
+        },
         { headers: corsHeaders }
       );
     }
@@ -93,13 +121,18 @@ export async function GET(req: NextRequest) {
       {
         headerTitle,
         showPoweredBy: !paid,
+        accentColor: resolvedWidgetAccentColor(row.widgetAccentColor ?? null),
       },
       { headers: corsHeaders }
     );
   } catch (e) {
     console.error("widget-config:", e);
     return NextResponse.json(
-      { headerTitle: "Plainbot", showPoweredBy: true },
+      {
+        headerTitle: "Plainbot",
+        showPoweredBy: true,
+        accentColor: resolvedWidgetAccentColor(null),
+      },
       { status: 200, headers: corsHeaders }
     );
   }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import { useBot } from "@/components/BotContext";
 import { planHasPaidConversationTier, UNLIMITED_CONVERSATIONS_DISPLAY } from "@/lib/plans";
+import { resolvedWidgetAccentColor } from "@/lib/widget-color";
 
 interface ChatPanelProps {
   compact?: boolean;
@@ -44,6 +45,22 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
   const [supportReplyMeta, setSupportReplyMeta] = useState<Map<string, { repliedAt: string | null }>>(new Map());
   const [currentTicketRef, setCurrentTicketRef] = useState<string | null>(null);
   const [ticketResolved, setTicketResolved] = useState(false);
+  const [embedAccent, setEmbedAccent] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!embed || !chatbotId) {
+      setEmbedAccent(null);
+      return;
+    }
+    const q = `?storeId=${encodeURIComponent(chatbotId)}`;
+    fetch(`/api/chatbots/me${q}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const c = d.chatbot?.widgetAccentColor;
+        setEmbedAccent(resolvedWidgetAccentColor(typeof c === "string" ? c : null));
+      })
+      .catch(() => setEmbedAccent(resolvedWidgetAccentColor(null)));
+  }, [embed, chatbotId]);
 
   // Initial greeting once we know scraped data / personality
   useEffect(() => {
@@ -447,9 +464,16 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
                 <div
                   className={`max-w-[80%] rounded-2xl px-3 py-2 ${
                     m.role === "user"
-                      ? "bg-primary-600 text-white rounded-br-sm"
+                      ? embed && embedAccent
+                        ? "text-white rounded-br-sm"
+                        : "bg-primary-600 text-white rounded-br-sm"
                       : "bg-slate-800 text-slate-100 rounded-bl-sm"
                   }`}
+                  style={
+                    m.role === "user" && embed && embedAccent
+                      ? { backgroundColor: embedAccent }
+                      : undefined
+                  }
                 >
                   <p className="whitespace-pre-wrap">
                     {m.role === "assistant"
@@ -518,6 +542,11 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
             variant="primary"
             disabled={disabled || !input.trim()}
             className="shrink-0"
+            style={
+              embed && embedAccent
+                ? { backgroundColor: embedAccent, backgroundImage: "none" }
+                : undefined
+            }
           >
             {!unlimitedRemaining && conversationRemaining <= 0 ? "Upgrade" : loading ? "Sending..." : "Send"}
           </Button>

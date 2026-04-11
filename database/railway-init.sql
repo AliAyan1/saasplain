@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS chatbots (
   guard_rails       TEXT DEFAULT NULL,
   uploaded_docs_text LONGTEXT DEFAULT NULL,
   widget_snippet    TEXT DEFAULT NULL,
+  widget_accent_color VARCHAR(7) DEFAULT NULL,
   is_active       TINYINT(1) DEFAULT 1,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

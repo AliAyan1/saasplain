@@ -5,33 +5,74 @@ import Card from "@/components/Card";
 import AiDemoSection from "@/components/AiDemoSection";
 import LandingChatSection from "@/components/LandingChatSection";
 import HeroSection from "@/components/HeroSection";
+import StatsBar from "@/components/StatsBar";
 import AnimatedSection from "@/components/AnimatedSection";
+import FoundingOfferBlock from "@/components/FoundingOfferBlock";
+import { formatFoundingOfferClosingDate, getFoundingOfferEndMs } from "@/lib/founding-offer";
 
 export default function HomePage() {
+  const foundingCloseLabel = formatFoundingOfferClosingDate(getFoundingOfferEndMs());
+  const faqItems: { q: string; a: string }[] = [
+    {
+      q: "How long does setup take?",
+      a: "Most stores are live in under 10 minutes. Paste your URL, we read your store automatically, add one script tag to your site, done.",
+    },
+    {
+      q: "Does it work with Shopify and WooCommerce?",
+      a: "Yes. Both platforms fully supported. One-click install for Shopify via the App Store. One script tag for WooCommerce.",
+    },
+    {
+      q: "What happens when the bot can't answer something?",
+      a: "It creates a support ticket automatically and forwards the full conversation to your email. Your team only sees what actually needs a human.",
+    },
+    {
+      q: "Can I customise the chatbot's personality and tone?",
+      a: "Yes. Set your tone, add custom FAQs, match your brand colours — all from your dashboard in minutes.",
+    },
+    {
+      q: "What happens when I hit my conversation limit?",
+      a: "You get an in-app notification before you hit the limit. Upgrade in one click, no call required, instant access.",
+    },
+    {
+      q: "Is there a contract?",
+      a: "No. Monthly subscription. Cancel anytime from your dashboard.",
+    },
+    {
+      q: "Will it really learn my whole store?",
+      a: "Yes. Paste your store URL and Plainbot reads every product page, your returns policy, shipping info, FAQs — everything publicly visible on your site. Takes under 2 minutes.",
+    },
+    {
+      q: "What is founding member pricing?",
+      a: `Early customers lock in a discounted rate for life — even when we raise prices. $79/month Growth tier stays at $79 forever for founding members. Closes on ${foundingCloseLabel}.`,
+    },
+  ];
+
   return (
     <>
       <main>
         {/* Hero — above the fold: headline, subhead, single CTA only (no global nav) */}
         <HeroSection />
 
+        <StatsBar />
+
         {/* How It Works */}
         <section id="how-it-works" className="border-b border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
-            <AnimatedSection variant="fade-up">
+            <AnimatedSection variant="fade-up" className="mx-auto max-w-3xl text-center">
               <p className="text-sm font-semibold uppercase tracking-wider text-primary-400">
                 How It Works
               </p>
               <h2 className="mt-2 text-3xl font-bold text-slate-100 sm:text-4xl">
-                Go live in 3 simple steps
+                Go live in 3 steps
               </h2>
             </AnimatedSection>
-            <div className="mt-12 grid gap-8 sm:grid-cols-3">
+            <div className="mx-auto mt-12 grid w-full max-w-6xl grid-cols-1 gap-8 sm:grid-cols-3 sm:gap-8 lg:gap-10">
               {[
                 {
                   step: 1,
-                  title: "Enter your website URL",
+                  title: "Paste your store URL",
                   description:
-                    "Paste your store URL and we’ll discover and index your pages automatically.",
+                    "Plainbot reads your entire store automatically. Products, policies, FAQs — all of it. Done in under 2 minutes.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -43,9 +84,9 @@ export default function HomePage() {
                 },
                 {
                   step: 2,
-                  title: "Customize chatbot personality",
+                  title: "Customise in 5 minutes",
                   description:
-                    "Set tone, FAQs, and behavior so the bot matches your brand.",
+                    "Set your tone, add custom FAQs, choose your brand colours. No coding. No technical setup. Just your preferences.",
                   icon: (
                     <>
                       <path
@@ -65,9 +106,9 @@ export default function HomePage() {
                 },
                 {
                   step: 3,
-                  title: "Integrate and go live",
+                  title: "Go live instantly",
                   description:
-                    "Add one snippet to your site or connect your help center. You’re live.",
+                    "Add one line of code. Your AI support agent is live immediately.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -78,8 +119,13 @@ export default function HomePage() {
                   ),
                 },
               ].map((item, idx) => (
-                <AnimatedSection key={item.step} variant="fade-up" delay={150 + idx * 100}>
-                  <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
+                <AnimatedSection
+                  key={item.step}
+                  variant="fade-up"
+                  delay={150 + idx * 100}
+                  className="w-full min-w-0"
+                >
+                  <div className="flex w-full min-w-0 flex-col items-center text-center sm:items-start sm:text-left">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-500 text-lg font-bold text-white shadow-soft transition-transform hover:scale-110">
                       {item.step}
                     </div>
@@ -103,6 +149,11 @@ export default function HomePage() {
                 </AnimatedSection>
               ))}
             </div>
+            <AnimatedSection variant="fade-up" delay={500}>
+              <p className="mx-auto mt-12 max-w-2xl text-center text-lg font-bold text-slate-100">
+                Most stores go from signup to live chatbot in under 10 minutes.
+              </p>
+            </AnimatedSection>
           </div>
         </section>
 
@@ -110,11 +161,14 @@ export default function HomePage() {
         <AiDemoSection />
 
         {/* Features */}
-        <section className="border-t border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <section
+          id="features"
+          className="border-t border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-24"
+        >
           <div className="mx-auto max-w-7xl">
             <AnimatedSection variant="fade-up">
               <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl">
-                Everything you need to automate
+                Everything you need to automate support
               </h2>
               <p className="mt-4 max-w-2xl text-lg text-slate-400">
                 Stop drowning in tickets. Get a world-class support layer for a fraction of the cost.
@@ -123,35 +177,22 @@ export default function HomePage() {
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 {
-                  title: "Website URL Scraping",
+                  title: "Learns Your Entire Store",
                   description:
-                    "We crawl your site and product pages so the AI knows your catalog and policies.",
+                    "Plainbot reads your products, policies, pricing, and FAQs automatically. It knows your store better than most of your staff within minutes.",
                   icon: (
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9a9 9 0 009-9m-9 9a9 9 0 009 9m-9-9a9 9 0 009-9"
+                      d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
                     />
                   ),
                 },
                 {
-                  title: "AI Chatbot & Voice Bot",
+                  title: "Answers Every Question 24/7",
                   description:
-                    "Deploy chat and voice agents that resolve issues and upsell 24/7.",
-                  icon: (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0V8m0 0H6"
-                    />
-                  ),
-                },
-                {
-                  title: "100 Free Conversations",
-                  description:
-                    "100 free conversations per month on our permanent free plan — no card required.",
+                    "Handles returns, order tracking, shipping questions, product queries — automatically. In any language. At any hour.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -162,9 +203,9 @@ export default function HomePage() {
                   ),
                 },
                 {
-                  title: "Ticket Creation",
+                  title: "Smart Ticket Creation",
                   description:
-                    "AI automatically creates support tickets when queries need follow-up or human review.",
+                    "Complex issues get automatically escalated. Your team only sees what actually needs a human. Everything routine gets handled without you.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -175,9 +216,22 @@ export default function HomePage() {
                   ),
                 },
                 {
-                  title: "Forward to Email",
+                  title: "Recovers Abandoned Conversations",
                   description:
-                    "Forward entire conversations to your team's inbox with one click.",
+                    "Customers browsing at 2am get instant answers instead of silence. Buying questions get answered. Sales that would have been lost get saved.",
+                  icon: (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  ),
+                },
+                {
+                  title: "Full Conversation Forwarding",
+                  description:
+                    "Every conversation forwarded to your inbox with full history. Stay in the loop without doing the work.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -188,9 +242,9 @@ export default function HomePage() {
                   ),
                 },
                 {
-                  title: "One-Click Integration",
+                  title: "Live in 10 Minutes",
                   description:
-                    "Add a script tag or install our app. No coding or complex setup.",
+                    "One script tag. No coding. No complex setup. No onboarding calls. Just paste and go.",
                   icon: (
                     <path
                       strokeLinecap="round"
@@ -292,9 +346,14 @@ export default function HomePage() {
                   recommended: true,
                 },
               ].map((plan, idx) => (
-                <AnimatedSection key={plan.name} variant="scale-in" delay={150 + idx * 100}>
+                <AnimatedSection
+                  key={plan.name}
+                  variant="scale-in"
+                  delay={150 + idx * 100}
+                  className="flex h-full flex-col"
+                >
                 <Card
-                  className={`relative flex flex-col transition-all hover:scale-[1.02] ${
+                  className={`relative flex h-full flex-col transition-all hover:scale-[1.02] ${
                     plan.recommended
                       ? "ring-2 ring-primary-500 shadow-soft-lg"
                       : ""
@@ -321,7 +380,7 @@ export default function HomePage() {
                       </span>
                     )}
                   </h3>
-                  <ul className="mt-6 flex-1 space-y-3">
+                  <ul className="mt-6 space-y-3">
                     {plan.features.map((f) => (
                       <li
                         key={f}
@@ -344,7 +403,7 @@ export default function HomePage() {
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-8 shrink-0">
+                  <div className="mt-auto shrink-0 pt-8">
                     <Link href={plan.href}>
                       <Button
                         variant={plan.variant}
@@ -358,6 +417,9 @@ export default function HomePage() {
                 </AnimatedSection>
               ))}
             </div>
+
+            <FoundingOfferBlock />
+
             <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-slate-500">
               Running an agency or need white-label?{" "}
               <Link
@@ -370,27 +432,47 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* FAQ */}
+        <section
+          id="faq"
+          className="border-t border-slate-800 bg-slate-950/40 px-4 py-16 sm:px-6 lg:px-8 lg:py-24"
+        >
+          <div className="mx-auto max-w-3xl">
+            <AnimatedSection variant="fade-up">
+              <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl">Common questions</h2>
+            </AnimatedSection>
+            <ul className="mt-10 space-y-10">
+              {faqItems.map((item) => (
+                <li key={item.q}>
+                  <h3 className="text-lg font-semibold text-slate-100">{item.q}</h3>
+                  <p className="mt-2 text-slate-400 leading-relaxed">{item.a}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         {/* CTA */}
         <section className="relative border-t border-slate-800 bg-black px-4 py-16 sm:px-6 lg:px-8 lg:py-20 overflow-hidden">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-primary-500/10 blur-[120px] animate-glow-pulse" />
           </div>
           <AnimatedSection variant="fade-up" className="relative mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl">
-              Ready to automate your store?
+            <h2 className="text-3xl font-bold text-slate-100 sm:text-4xl text-balance">
+              Your store is answering customer questions right now. Is it doing it automatically?
             </h2>
             <p className="mt-4 text-lg text-slate-400">
-              Set up in minutes. Your free plan is permanent — not a limited trial.
+              Join 200+ Shopify and WooCommerce stores running support on autopilot.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
               <Link href="/signup?plan=free">
-                <Button variant="primary" className="min-w-[160px] transition-transform hover:scale-105 active:scale-95">
-                  Start free, no card needed
+                <Button variant="primary" className="min-w-[200px] transition-transform hover:scale-105 active:scale-95">
+                  Start free — no card needed
                 </Button>
               </Link>
             </div>
-            <p className="mt-6 flex items-center justify-center gap-2 text-sm text-slate-500">
-              <span className="text-primary-400">Secure & GDPR compliant</span>
+            <p className="mt-5 text-sm text-slate-500">
+              Founding member pricing ends {foundingCloseLabel}. $79/month locked forever.
             </p>
           </AnimatedSection>
         </section>

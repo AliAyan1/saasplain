@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { useBot } from "@/components/BotContext";
+import { DEFAULT_WIDGET_ACCENT, normalizeWidgetAccentColor } from "@/lib/widget-color";
 
 const PERSONALITIES = ["Friendly", "Professional", "Sales-focused", "Premium Luxury"] as const;
 
@@ -41,6 +42,10 @@ export default function SettingsPage() {
   const [pdfUploading, setPdfUploading] = useState(false);
   const [pdfMessage, setPdfMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
+  const [widgetAccentColor, setWidgetAccentColor] = useState(DEFAULT_WIDGET_ACCENT);
+  const [widgetColorSaving, setWidgetColorSaving] = useState(false);
+  const [widgetColorMessage, setWidgetColorMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     fetch("/api/users/forward-email")
       .then((r) => r.json())
@@ -57,9 +62,39 @@ export default function SettingsPage() {
       .then((data) => {
         if (data.chatbot?.personality) setPersonality(data.chatbot.personality);
         if (data.chatbot?.language) setLanguage(data.chatbot.language);
+        const w = data.chatbot?.widgetAccentColor;
+        if (typeof w === "string" && normalizeWidgetAccentColor(w)) {
+          setWidgetAccentColor(normalizeWidgetAccentColor(w)!);
+        }
       })
       .catch(() => {});
   }, [chatbotId]);
+
+  const handleSaveWidgetColor = () => {
+    const n = normalizeWidgetAccentColor(widgetAccentColor);
+    if (!n) {
+      setWidgetColorMessage({ type: "error", text: "Use a valid hex colour (#RGB or #RRGGBB)." });
+      return;
+    }
+    setWidgetAccentColor(n);
+    setWidgetColorMessage(null);
+    setWidgetColorSaving(true);
+    fetch("/api/chatbots/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ widgetAccentColor: n, ...(chatbotId ? { chatbotId } : {}) }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) {
+          setWidgetColorMessage({ type: "error", text: data.error });
+        } else {
+          setWidgetColorMessage({ type: "ok", text: "Widget colour saved. Your embed snippet will use this colour." });
+        }
+      })
+      .catch(() => setWidgetColorMessage({ type: "error", text: "Failed to save." }))
+      .finally(() => setWidgetColorSaving(false));
+  };
 
   const handleSaveForwardEmail = () => {
     setForwardEmailMessage(null);
@@ -214,6 +249,40 @@ export default function SettingsPage() {
               </option>
             ))}
           </select>
+        </Card>
+
+        {/* Embed widget colour */}
+        <Card className="space-y-4">
+          <h2 className="text-sm font-semibold text-slate-200">Widget colour (embed)</h2>
+          <p className="text-xs text-slate-500">
+            Floating button and send button on your site. Works alongside document uploads and guard rails. Paid plans
+            remove &quot;Powered by Plainbot&quot;; your colour still applies.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="color"
+              value={normalizeWidgetAccentColor(widgetAccentColor) ?? DEFAULT_WIDGET_ACCENT}
+              onChange={(e) => setWidgetAccentColor(e.target.value)}
+              className="h-11 w-16 cursor-pointer rounded border border-slate-600 bg-slate-900 p-1"
+              aria-label="Widget accent colour"
+            />
+            <input
+              type="text"
+              value={widgetAccentColor}
+              onChange={(e) => setWidgetAccentColor(e.target.value)}
+              placeholder="#f97316"
+              spellCheck={false}
+              className="w-40 rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+            <Button variant="primary" disabled={widgetColorSaving} onClick={handleSaveWidgetColor}>
+              {widgetColorSaving ? "Saving…" : "Save colour"}
+            </Button>
+          </div>
+          {widgetColorMessage && (
+            <p className={`text-xs ${widgetColorMessage.type === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+              {widgetColorMessage.text}
+            </p>
+          )}
         </Card>
 
         {/* Extra PDF / TXT for AI training */}
