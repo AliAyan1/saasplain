@@ -323,8 +323,8 @@ export default function CreateBotPage() {
               <span className="font-medium text-slate-200">{scrapedData.url}</span>
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              {scrapedData.products?.length ?? 0} products detected. Website content is stored
-              locally for this demo session (no database yet).
+              {scrapedData.products?.length ?? 0} products detected. After you finish setup, this
+              content is saved with your chatbot on the server.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Button variant="primary" onClick={() => router.push("/training-data")}>

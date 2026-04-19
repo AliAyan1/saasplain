@@ -7,6 +7,7 @@ import Button from "./Button";
 import Logo from "./Logo";
 import { useAppShell } from "./AppShellContext";
 import StoreSwitcher from "./StoreSwitcher";
+import { clearBotStorage } from "@/lib/bot-local-storage";
 
 const APP_ROUTES = [
   "/dashboard",
@@ -89,6 +90,7 @@ export default function Navbar() {
       await fetch("/api/auth/logout", { method: "POST" });
       document.cookie = "mock-auth=; path=/; max-age=0";
       window.localStorage.removeItem("mock-auth");
+      clearBotStorage();
     } catch {
       // ignore
     }

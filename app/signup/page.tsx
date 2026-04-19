@@ -7,6 +7,7 @@ import Button from "@/components/Button";
 import Input from "@/components/Input";
 import Card from "@/components/Card";
 import Logo from "@/components/Logo";
+import { resetBotStorageForNewAccount } from "@/lib/bot-local-storage";
 
 function SignupContent() {
   const searchParams = useSearchParams();
@@ -62,13 +63,7 @@ function SignupContent() {
           : p === "custom"
             ? "agency"
             : "free";
-      try {
-        const raw = window.localStorage.getItem("bot-state-v2");
-        const state = raw ? JSON.parse(raw) : {};
-        window.localStorage.setItem("bot-state-v2", JSON.stringify({ ...state, userPlan }));
-      } catch {
-        /* ignore */
-      }
+      resetBotStorageForNewAccount(userPlan);
       if (data.redirectToPayment) {
         const payPlan = (data.paymentPlan as string) || plan;
         window.location.href = `/signup/payment?plan=${encodeURIComponent(payPlan)}`;

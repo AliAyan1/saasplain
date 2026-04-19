@@ -7,6 +7,7 @@ import Button from "@/components/Button";
 import Input from "@/components/Input";
 import Card from "@/components/Card";
 import Logo from "@/components/Logo";
+import { resetBotStorageForNewAccount } from "@/lib/bot-local-storage";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,13 +45,7 @@ export default function LoginPage() {
             : rawPlan === "business"
               ? "pro"
               : "free";
-      try {
-        const raw = window.localStorage.getItem("bot-state-v2");
-        const state = raw ? JSON.parse(raw) : {};
-        window.localStorage.setItem("bot-state-v2", JSON.stringify({ ...state, userPlan: plan }));
-      } catch {
-        /* ignore */
-      }
+      resetBotStorageForNewAccount(plan);
       router.push("/dashboard");
     } catch {
       setError("Login failed. Try again.");

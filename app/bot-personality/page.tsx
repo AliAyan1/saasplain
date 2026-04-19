@@ -185,7 +185,7 @@ export default function BotPersonalityPage() {
 
         <Card className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-100">
-            AI guard raises (optional)
+            AI guard rails (optional)
           </h2>
           <p className="text-xs text-slate-400">
             Rules for how the AI should behave. One per line. Saved for this chatbot.

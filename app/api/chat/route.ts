@@ -273,13 +273,25 @@ export async function POST(req: NextRequest) {
 
     const websiteContext = buildWebsiteContext(scrapedData);
     const personalityLabel = personality || "Friendly";
-    const guardRailsText = (scrapedData as { guardRails?: string } | null)?.guardRails?.trim();
+    const bodyGuardRails =
+      typeof (body as { guardRails?: unknown }).guardRails === "string"
+        ? (body as { guardRails: string }).guardRails.trim()
+        : "";
+    const guardRailsFromDb = (scrapedData as { guardRails?: string } | null)?.guardRails?.trim() || "";
+    /** With chatbotId, rules always come from the database (do not trust client body — avoids spoofing). */
+    const guardRailsText = chatbotId ? guardRailsFromDb : bodyGuardRails || guardRailsFromDb;
     const languageCode = (scrapedData as { language?: string } | null)?.language?.trim() || "en";
     const languageNames: Record<string, string> = { en: "English", es: "Spanish", fr: "French", de: "German", it: "Italian", pt: "Portuguese", nl: "Dutch", da: "Danish", sv: "Swedish", ar: "Arabic", hi: "Hindi", ja: "Japanese", zh: "Chinese" };
     const languageName = languageNames[languageCode] || languageCode;
     const languageRule = languageCode !== "en" ? `\nLANGUAGE: You must respond only in ${languageName}. All your replies must be in ${languageName}.\n` : "";
     let systemPrompt = `You are the AI assistant for this store. You speak as the store: use "we", "our website", "we offer". Your tone is professional, clear, and ${personalityLabel.toLowerCase()} where appropriate.${languageRule}
 
+FORMATTING AND LENGTH (chat widget):
+- Use clear structure: short paragraphs; blank line between ideas when you have more than one.
+- Use bullet points (lines starting with "- " or "• ") when it helps scanning: multiple products, policy points, contact options, features, or any 2+ separate facts. Single simple questions (greeting, one yes/no) stay 1–2 sentences without bullets.
+- Use a short numbered list (1. 2. 3.) only for sequential steps or ordered instructions.
+- Keep each bullet one line when possible; stay concise—no long essays.
+- Avoid filler ("I'd be happy to help"). Lead with the answer, then bullets if needed.
 
 Your knowledge base is limited to the WEBSITE DATA below. Provide accurate, helpful responses based only on that data.
 
@@ -287,7 +299,7 @@ VOICE AND URL RULE:
 - Always speak as the store: "We offer...", "On our website we have...", "We sell these types of...". Describe what we offer and what we have.
 - Do NOT include or write URLs at the end of your responses. Do not say "visit https://..." or paste the website link. Just describe what we offer (products, types, prices, policies) in your own words without giving a URL.
 
-PRIORITIES (in order): 1. Accuracy  2. Clarity  3. Professionalism  4. Relevance
+PRIORITIES (in order): 1. Clear, scannable formatting  2. Accuracy  3. Brevity  4. Relevance
 
 RESPONSE RULES:
 - Never fabricate missing information (e.g. do not invent product names or prices that are not in the data).
@@ -310,7 +322,7 @@ If the question relates to services → provide: Service name • What it includ
 
 If the question relates to contact → provide: Email • Phone • Address • Social links (use the CONTACT / REACH THE STORE section below when present).
 
-If multiple answers exist → organize in bullet points.
+If multiple answers exist → use a one-line lead-in if helpful, then bullets for distinct points. Prefer bullets over one dense paragraph when comparing options or listing details.
 
 If the question is unclear → ask one short clarifying question before answering.
 
@@ -319,11 +331,19 @@ FORWARD TO SUPPORT (important):
 - For normal product/price/policy questions, do NOT add [FORWARD_TO_SUPPORT].
 
 TONE: Professional, clear, helpful, business-aligned, confident.`;
-    if (guardRailsText) {
-      systemPrompt += `\n\nGUARD RAISES (follow these rules for this chatbot):\n${guardRailsText}`;
-    }
 
-    const fullPrompt = `${systemPrompt}
+    const ownerInstructionsBlock = guardRailsText
+      ? `=== MANDATORY STORE OWNER INSTRUCTIONS (HIGHEST PRIORITY) ===
+The store owner wrote these rules. You MUST follow them on every reply. If any guidance later in this message conflicts with these instructions, obey the store owner first.
+
+${guardRailsText}
+
+=== END MANDATORY STORE OWNER INSTRUCTIONS ===
+
+`
+      : "";
+
+    const fullPrompt = `${ownerInstructionsBlock}${systemPrompt}
 
 === WEBSITE DATA (your only source — use this and nothing else) ===
 
@@ -342,8 +362,8 @@ ${websiteContext}
           { role: "system", content: fullPrompt },
           { role: "user", content: question },
         ],
-        temperature: 0.25,
-        max_tokens: 600,
+        temperature: 0.2,
+        max_tokens: 380,
         stream: true,
         stream_options: { include_usage: false },
       },

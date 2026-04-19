@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { UNLIMITED_CONVERSATIONS_DISPLAY } from "@/lib/plans";
+import { BOT_STATE_STORAGE_KEY } from "@/lib/bot-local-storage";
 
 export type Personality =
   | "Friendly"
@@ -43,6 +44,8 @@ export interface ScrapedData {
   description: string;
   content: string;
   products?: { name: string; price?: string }[];
+  /** AI guard rails from server — mirrored for UI; chat API loads from DB when chatbotId is sent. */
+  guardRails?: string;
 }
 
 export type ActivityType = "resolved" | "query" | "forwarded" | "system" | "warning";
@@ -139,8 +142,6 @@ function planFromStorage(p: string | undefined): UserPlan {
 
 const BotContext = createContext<BotContextValue | undefined>(undefined);
 
-const STORAGE_KEY = "bot-state-v2";
-
 function safeParseJson<T>(value: string | null): T | null {
   if (!value) return null;
   try {
@@ -192,7 +193,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       forwarded: ForwardedConversation[];
       recentActivity: ActivityItem[];
       tickets: Ticket[];
-    }>(window.localStorage.getItem(STORAGE_KEY));
+    }>(window.localStorage.getItem(BOT_STATE_STORAGE_KEY));
 
     if (fromStorage) {
       setUserPlan(planFromStorage(fromStorage.userPlan));
@@ -216,7 +217,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
   // On load (and after refresh), hydrate from server so nothing is lost
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved = safeParseJson<{ chatbotId?: string | null }>(window.localStorage.getItem(STORAGE_KEY));
+    const saved = safeParseJson<{ chatbotId?: string | null }>(window.localStorage.getItem(BOT_STATE_STORAGE_KEY));
     const preferredStoreId =
       typeof saved?.chatbotId === "string" && saved.chatbotId ? saved.chatbotId : null;
     const botUrl = preferredStoreId
@@ -247,8 +248,20 @@ export function BotProvider({ children }: { children: ReactNode }) {
             description: c.websiteDescription || "",
             content: c.websiteContent || "",
             products: Array.isArray(c.products) ? c.products : [],
+            ...(typeof (c as { guardRails?: string }).guardRails === "string" && (c as { guardRails: string }).guardRails
+              ? { guardRails: (c as { guardRails: string }).guardRails }
+              : {}),
           });
           setPersonality((c.personality as Personality) || "Friendly");
+        } else {
+          // Server has no chatbot for this account — drop stale localStorage from a previous user/session.
+          setChatbotId(null);
+          setScrapedData(null);
+          setPersonality("Friendly");
+          setMessages([]);
+          setForwarded([]);
+          setRecentActivity([]);
+          setTickets([]);
         }
         if (stats?.unlimited) {
           setConversationRemaining(UNLIMITED_CONVERSATIONS_DISPLAY);
@@ -262,7 +275,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(
-      STORAGE_KEY,
+      BOT_STATE_STORAGE_KEY,
       JSON.stringify({
         userPlan,
         chatbotId,
@@ -298,6 +311,9 @@ export function BotProvider({ children }: { children: ReactNode }) {
         description: c.websiteDescription || "",
         content: c.websiteContent || "",
         products: Array.isArray(c.products) ? c.products : [],
+        ...(typeof (c as { guardRails?: string }).guardRails === "string" && (c as { guardRails: string }).guardRails
+          ? { guardRails: (c as { guardRails: string }).guardRails }
+          : {}),
       });
       setPersonality((c.personality as Personality) || "Friendly");
     } catch {
