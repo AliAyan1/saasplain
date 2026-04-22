@@ -55,6 +55,20 @@ CREATE TABLE IF NOT EXISTS chatbot_documents (
   INDEX idx_chatbot_documents_bot (chatbot_id)
 );
 
+-- RAG: OpenAI text-embedding chunks per chatbot
+CREATE TABLE IF NOT EXISTS chatbot_knowledge_chunks (
+  id              CHAR(36) PRIMARY KEY,
+  chatbot_id      CHAR(36) NOT NULL,
+  source_type     ENUM('website', 'document', 'catalog') NOT NULL,
+  source_label    VARCHAR(500) DEFAULT NULL,
+  chunk_index     INT NOT NULL DEFAULT 0,
+  content         TEXT NOT NULL,
+  embedding_json  LONGTEXT NOT NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (chatbot_id) REFERENCES chatbots(id) ON DELETE CASCADE,
+  INDEX idx_knowledge_bot (chatbot_id)
+) ENGINE=InnoDB;
+
 -- CONVERSATIONS
 CREATE TABLE IF NOT EXISTS conversations (
   id              CHAR(36) PRIMARY KEY,

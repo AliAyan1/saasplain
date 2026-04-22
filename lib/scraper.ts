@@ -199,6 +199,120 @@ function parseSitemapXml(xml: string, productPathPattern: RegExp): string[] {
   return urls;
 }
 
+const MAX_INFO_URLS_FROM_SITEMAP = 30;
+
+function collectLocsFromSitemapXml(xml: string): string[] {
+  const urls: string[] = [];
+  const locRegex = /<loc>\s*([^<]+)\s*<\/loc>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = locRegex.exec(xml)) !== null) {
+    const loc = m[1].trim();
+    if (loc) urls.push(loc);
+  }
+  return urls;
+}
+
+const INFO_PATH_KEYWORDS = /(about|about[_-]us|contact|contact[_-]us|faq|shipping|return|refund|polic|policies|terms|help|support|warranty|privacy|deliver|delivery|orders|legal|our[_-]story|questions)/i;
+
+/** Heuristic: URL path looks like policy / about / contact / shipping (for sitemap + crawl filtering) */
+export function isLikelyInfoOrPolicyPageUrl(href: string): boolean {
+  try {
+    const p = new URL(href).pathname.toLowerCase();
+    if (/\.(xml|js|css|json|png|jpe?g|gif|webp|svg|pdf|gz|zip)(\?|$)/i.test(p)) return false;
+    if (p === "/" || p === "" || p === "/index" || p === "/index.html") return false;
+    if (/\/(cart|checkout|account|admin|my-account)(\/|$)/i.test(p)) return false;
+    return (
+      INFO_PATH_KEYWORDS.test(p) ||
+      (/\/(pages?|p)\/[^/]+/i.test(p) && !/\/(product|products|item|shop)\b/i.test(p))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Discover policy / about / contact / FAQ type URLs from sitemap(s).
+ * Tries the same sitemap locations as product discovery; for sitemap index files,
+ * follows child sitemaps and collects matching page URLs.
+ */
+export async function fetchInfoAndPolicyUrlsFromSitemap(baseUrl: string): Promise<string[]> {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (u: string) => {
+    if (!u || out.length >= MAX_INFO_URLS_FROM_SITEMAP) return;
+    if (!u.startsWith("http")) return;
+    if (!isLikelyInfoOrPolicyPageUrl(u)) return;
+    const key = u.split("#")[0];
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(key);
+  };
+
+  const base = getBaseUrl(baseUrl).replace(/\/$/, "");
+  const sitemapCandidates = [
+    `${base}/sitemap.xml`,
+    `${base}/sitemap_index.xml`,
+    `${base}/sitemap-index.xml`,
+    `${base}/wp-sitemap.xml`,
+    `${base}/sitemap_pages_1.xml`,
+    `${base}/sitemap_products_1.xml`,
+    `${base}/product-sitemap.xml`,
+    `${base}/sitemap-products.xml`,
+  ];
+
+  let sitemapBody: string | null = null;
+  for (const candidate of sitemapCandidates) {
+    try {
+      const res = await fetchWithTimeout(candidate, {
+        headers: { Accept: "application/xml, text/xml, */*" },
+      });
+      if (res.ok) {
+        sitemapBody = await res.text();
+        break;
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  if (!sitemapBody) return [];
+
+  const topLocs = collectLocsFromSitemapXml(sitemapBody);
+  const isLikelyIndex =
+    topLocs.length > 1 &&
+    topLocs.slice(0, Math.min(8, topLocs.length)).filter(
+      (l) => /\.(xml|gz)(\?.*)?$/i.test(l) || /wp-sitemap|sitemap[._-]/i.test(l)
+    ).length >= 2;
+
+  if (isLikelyIndex) {
+    for (const loc of topLocs.slice(0, 10)) {
+      if (!/\.(xml|gz)(\?.*)?$/i.test(loc) && isLikelyInfoOrPolicyPageUrl(loc)) {
+        add(loc);
+        if (out.length >= MAX_INFO_URLS_FROM_SITEMAP) return out;
+        continue;
+      }
+      if (!/\.(xml|gz)(\?.*)?$/i.test(loc)) continue;
+      try {
+        const r = await fetchWithTimeout(loc, { headers: { Accept: "application/xml, text/xml, */*" } });
+        if (!r.ok) continue;
+        const subXml = await r.text();
+        for (const u of collectLocsFromSitemapXml(subXml)) {
+          add(u);
+          if (out.length >= MAX_INFO_URLS_FROM_SITEMAP) return out;
+        }
+      } catch {
+        // skip
+      }
+    }
+  } else {
+    for (const u of topLocs) {
+      add(u);
+      if (out.length >= MAX_INFO_URLS_FROM_SITEMAP) return out;
+    }
+  }
+  return out;
+}
+
 /** Fetch sitemap index or sitemap and return product URLs */
 export async function fetchProductUrlsFromSitemap(
   baseUrl: string,

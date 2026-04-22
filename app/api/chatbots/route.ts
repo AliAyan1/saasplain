@@ -3,6 +3,7 @@ import { getAuthFromCookie } from "@/lib/auth";
 import { getDbConnection } from "@/lib/db";
 import { canAddStore, storeLimitForPlan } from "@/lib/plans";
 import { randomUUID } from "crypto";
+import { reindexChatbot } from "@/lib/rag";
 
 type Personality = "Friendly" | "Professional" | "Sales-focused" | "Premium Luxury";
 
@@ -71,6 +72,11 @@ export async function POST(req: NextRequest) {
       `INSERT INTO activity_log (id, user_id, chatbot_id, type, title, detail) VALUES (?, ?, ?, 'system', 'Website connected', ?)`,
       [activityId, auth.userId, chatbotId, `AI updated with content from ${websiteUrl.replace(/^https?:\/\//, "").split("/")[0]}`]
     );
+    try {
+      await reindexChatbot(conn, chatbotId);
+    } catch (e) {
+      console.error("[RAG] reindex after create chatbot:", e);
+    }
     await conn.end();
 
     return NextResponse.json({

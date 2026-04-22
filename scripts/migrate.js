@@ -305,6 +305,32 @@ async function run() {
       console.log("chatbot_documents backfill skipped:", e.message || e);
     }
 
+    // chatbot_knowledge_chunks (RAG: embeddings for website, docs, product catalog)
+    const [knowledgeTables] = await conn.execute(
+      "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'chatbot_knowledge_chunks'",
+      [database]
+    );
+    if (!Array.isArray(knowledgeTables) || knowledgeTables.length === 0) {
+      console.log("Creating chatbot_knowledge_chunks...");
+      await conn.execute(`
+        CREATE TABLE chatbot_knowledge_chunks (
+          id              CHAR(36) PRIMARY KEY,
+          chatbot_id      CHAR(36) NOT NULL,
+          source_type     ENUM('website', 'document', 'catalog') NOT NULL,
+          source_label    VARCHAR(500) DEFAULT NULL,
+          chunk_index     INT NOT NULL DEFAULT 0,
+          content         TEXT NOT NULL,
+          embedding_json  LONGTEXT NOT NULL,
+          created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (chatbot_id) REFERENCES chatbots(id) ON DELETE CASCADE,
+          INDEX idx_knowledge_bot (chatbot_id)
+        ) ENGINE=InnoDB
+      `);
+      console.log("  OK");
+    } else {
+      console.log("chatbot_knowledge_chunks already exists, skip.");
+    }
+
     // chatbots.language (response language for the chatbot)
     if (!(await hasColumn(conn, "chatbots", "language"))) {
       console.log("Adding chatbots.language...");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthFromCookie } from "@/lib/auth";
 import { getDbConnection } from "@/lib/db";
+import { reindexChatbot } from "@/lib/rag";
 
 export const runtime = "nodejs";
 
@@ -21,15 +22,21 @@ export async function DELETE(
   const conn = await getDbConnection();
   try {
     const [rows] = await conn.execute(
-      `SELECT d.id FROM chatbot_documents d
+      `SELECT d.id, d.chatbot_id AS chatbotId FROM chatbot_documents d
        INNER JOIN chatbots c ON c.id = d.chatbot_id
        WHERE d.id = ? AND c.user_id = ?`,
       [documentId, auth.userId]
     );
-    if ((rows as { id: string }[]).length === 0) {
+    const row0 = (rows as { id: string; chatbotId: string }[])[0];
+    if (!row0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     await conn.execute("DELETE FROM chatbot_documents WHERE id = ?", [documentId]);
+    try {
+      await reindexChatbot(conn, row0.chatbotId);
+    } catch (e) {
+      console.error("[RAG] reindex after document delete:", e);
+    }
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     const code = (e as { code?: string })?.code;

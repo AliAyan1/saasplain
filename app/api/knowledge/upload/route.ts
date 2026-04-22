@@ -4,6 +4,7 @@ import { getAuthFromCookie } from "@/lib/auth";
 import { getDbConnection } from "@/lib/db";
 import pdfParse from "pdf-parse";
 import { checkRateLimit, LIMITS } from "@/lib/rate-limit";
+import { reindexChatbot } from "@/lib/rag";
 
 const ALLOWED_TYPES = ["application/pdf", "text/plain"];
 const ALLOWED_EXT = [".pdf", ".txt"];
@@ -135,6 +136,11 @@ export async function POST(req: NextRequest) {
         saved.push({ id, fileName: safeName });
       }
       await conn.commit();
+      try {
+        await reindexChatbot(conn, chatbotId);
+      } catch (e) {
+        console.error("[RAG] reindex after upload:", e);
+      }
       await conn.end();
 
       return NextResponse.json({

@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { load } from "cheerio";
-import { runScraper, isCaptchaOrBotPage, detectStorePlatform, type StoreType } from "@/lib/scraper";
+import {
+  runScraper,
+  isCaptchaOrBotPage,
+  detectStorePlatform,
+  getBaseUrl,
+  fetchInfoAndPolicyUrlsFromSitemap,
+  type StoreType,
+} from "@/lib/scraper";
 import { checkRateLimit, LIMITS } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-export const maxDuration = 60; // product feed + sitemap + optional product pages
+export const maxDuration = 90; // feed + sitemaps + policy/info pages
 
 function buildContentFromCheerio($: ReturnType<typeof load>): string {
   const texts: string[] = [];
@@ -186,6 +193,113 @@ function extractProductsFromHomepage($: ReturnType<typeof load>): { name: string
   return products.slice(0, 80);
 }
 
+/** When sitemap is missing paths, these are tried under the site root (order = common chatbot Q&A) */
+const STATIC_INFO_PATHS = [
+  "/about",
+  "/about-us",
+  "/our-story",
+  "/contact",
+  "/contact-us",
+  "/faq",
+  "/help",
+  "/shipping",
+  "/shipping-policy",
+  "/returns",
+  "/return-policy",
+  "/refund",
+  "/refund-policy",
+  "/policies",
+  "/policies/shipping-policy",
+  "/policies/return-policy",
+  "/policies/privacy-policy",
+  "/terms",
+  "/terms-of-service",
+  "/privacy",
+  "/privacy-policy",
+  "/pages/faq",
+  "/pages/about",
+  "/pages/contact",
+  "/pages/shipping",
+  "/pages/returns",
+];
+
+const MAX_EXTRA_INFO_PAGES = 10;
+const MAX_INFO_PAGE_TEXT = 6000;
+
+/** Sitemap (policy/about) + static paths, merged into homepage scrape content */
+async function appendInfoPolicyPages(
+  pageUrl: string,
+  homeContent: string,
+  fetchWithTimeout: (u: string) => Promise<Response>,
+  base: string
+): Promise<string> {
+  let homeKey = "";
+  try {
+    const u = new URL(pageUrl);
+    homeKey = `${u.origin}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch {
+    homeKey = pageUrl.toLowerCase();
+  }
+  const seen = new Set<string>([homeKey]);
+  const markAndKeep = (href: string): string | null => {
+    try {
+      const u = new URL(href);
+      const k = `${u.origin}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+      if (seen.has(k)) return null;
+      seen.add(k);
+      return href;
+    } catch {
+      return null;
+    }
+  };
+
+  let fromSitemap: string[] = [];
+  try {
+    fromSitemap = await fetchInfoAndPolicyUrlsFromSitemap(base);
+  } catch {
+    fromSitemap = [];
+  }
+  const staticHrefs: string[] = [];
+  for (const p of STATIC_INFO_PATHS) {
+    try {
+      staticHrefs.push(new URL(p, base + "/").href);
+    } catch {
+      /* skip */
+    }
+  }
+
+  const toFetch: string[] = [];
+  for (const h of fromSitemap) {
+    const k = markAndKeep(h);
+    if (k) toFetch.push(k);
+  }
+  for (const h of staticHrefs) {
+    const k = markAndKeep(h);
+    if (k) toFetch.push(k);
+  }
+
+  const parts: string[] = [];
+  let n = 0;
+  for (const target of toFetch) {
+    if (n >= MAX_EXTRA_INFO_PAGES) break;
+    try {
+      const res = await fetchWithTimeout(target);
+      if (!res.ok) continue;
+      const html = await res.text();
+      if (isCaptchaOrBotPage(html)) continue;
+      const $ = load(html);
+      const text = buildContentFromCheerio($) + extractContactFromPage($, base);
+      if (text.replace(/\s/g, "").length < 50) continue;
+      const chunk = text.length > MAX_INFO_PAGE_TEXT ? text.slice(0, MAX_INFO_PAGE_TEXT) + "\n[...]" : text;
+      parts.push(`\n\n--- Page: ${target} ---\n${chunk}`);
+      n++;
+    } catch {
+      // skip
+    }
+  }
+  return homeContent + parts.join("");
+}
+
 export async function POST(req: NextRequest) {
   const rl = checkRateLimit(req, "scrape", LIMITS.scrape);
   if (!rl.ok) {
@@ -229,24 +343,61 @@ export async function POST(req: NextRequest) {
       return res;
     };
 
-    const baseUrlForContact = url.replace(/\/$/, "").replace(/(https?:\/\/[^/]+).*/, "$1");
+    const baseUrlForContact = getBaseUrl(url);
+
+    const loadCheerio = (html: string) => {
+      const $ = load(html);
+      const title = $("title").first().text().trim() ?? "";
+      let description = $('meta[name="description"]').attr("content")?.trim() ?? "";
+      if (!description) description = $('meta[property="og:description"]').attr("content")?.trim() ?? "";
+      const content = buildContentFromCheerio($) + extractContactFromPage($, baseUrlForContact);
+      return { title, description, content };
+    };
+
+    // 0) No store type: sitemap (products) + homepage + sitemap/ policy pages (custom sites)
+    if (!storeType) {
+      const result = await runScraper(url, "custom", loadCheerio);
+      let finalContent = result.content;
+      try {
+        finalContent = await appendInfoPolicyPages(url, result.content, fetchWithTimeout, baseUrlForContact);
+      } catch (e) {
+        console.warn("appendInfoPolicyPages (no store type):", e);
+      }
+      let products: { name: string; price?: string }[] = result.products.map((p) => ({
+        name: p.name,
+        price: p.price,
+      }));
+      if (products.length === 0) {
+        try {
+          const r = await fetchWithTimeout(url);
+          if (r.ok) products = extractProductsFromHomepage(load(await r.text()));
+        } catch {
+          /* keep empty */
+        }
+      }
+      return NextResponse.json({
+        title: result.title,
+        description: result.description,
+        content: finalContent,
+        products,
+      });
+    }
 
     // 1) If store type is set, try product feed + sitemap scraper first
     if (storeType) {
       try {
-        const result = await runScraper(url, storeType, (html) => {
-          const $ = load(html);
-          const title = $("title").first().text().trim() ?? "";
-          let description = $('meta[name="description"]').attr("content")?.trim() ?? "";
-          if (!description) description = $('meta[property="og:description"]').attr("content")?.trim() ?? "";
-          const content = buildContentFromCheerio($) + extractContactFromPage($, baseUrlForContact);
-          return { title, description, content };
-        });
+        const result = await runScraper(url, storeType, loadCheerio);
+        let finalContent = result.content;
+        try {
+          finalContent = await appendInfoPolicyPages(url, result.content, fetchWithTimeout, baseUrlForContact);
+        } catch (e) {
+          console.warn("appendInfoPolicyPages (store type):", e);
+        }
         const products = result.products.map((p) => ({ name: p.name, price: p.price }));
         return NextResponse.json({
           title: result.title,
           description: result.description,
-          content: result.content,
+          content: finalContent,
           products,
         });
       } catch (feedErr) {
@@ -336,13 +487,18 @@ export async function POST(req: NextRequest) {
       description = $('meta[property="og:description"]').attr("content")?.trim() ?? "";
     }
 
-    const content = buildContentFromCheerio($) + extractContactFromPage($, baseUrlForContact);
+    let finalContent = buildContentFromCheerio($) + extractContactFromPage($, baseUrlForContact);
     const products = extractProductsFromHomepage($);
+    try {
+      finalContent = await appendInfoPolicyPages(url, finalContent, fetchWithTimeout, baseUrlForContact);
+    } catch (e) {
+      console.warn("appendInfoPolicyPages (fallback):", e);
+    }
 
     return NextResponse.json({
       title,
       description,
-      content,
+      content: finalContent,
       products,
     });
   } catch (err: unknown) {

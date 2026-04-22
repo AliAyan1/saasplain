@@ -5,10 +5,17 @@ import { randomUUID } from "crypto";
 import { checkRateLimit, LIMITS } from "@/lib/rate-limit";
 import { sendLimitReachedEmail } from "@/lib/usage-emails";
 import { getMergedUploadedDocsText } from "@/lib/knowledge-documents";
+import {
+  RAG_ENABLED,
+  reindexChatbot,
+  retrieveRelevantPassages,
+  getKnowledgeChunkCount,
+} from "@/lib/rag";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
-const modelFromEnv = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const modelFromEnv = process.env.OPENAI_MODEL || "gpt-4o";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -43,7 +50,7 @@ Return ONLY valid JSON with this exact schema:
     const completion = await client.chat.completions.create({
       model: modelFromEnv,
       temperature: 0,
-      max_tokens: 450,
+      max_tokens: 800,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: checkerSystem },
@@ -77,28 +84,41 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-function buildWebsiteContext(scrapedData: {
-  url?: string;
-  title?: string;
-  description?: string;
-  content?: string;
-  products?: { name?: string; price?: string }[];
-  uploadedDocsText?: string;
-} | null): string {
+function buildWebsiteContext(
+  scrapedData: {
+    url?: string;
+    title?: string;
+    description?: string;
+    content?: string;
+    products?: { name?: string; price?: string }[];
+    uploadedDocsText?: string;
+  } | null,
+  opts?: { ragPassages?: string[] }
+): string {
   if (!scrapedData) return "No website content was provided. You do not know anything specific about this store.";
   const parts: string[] = [];
+  const useRag = (opts?.ragPassages?.length ?? 0) > 0;
 
-  parts.push("=== STORE KNOWLEDGE (use this as your only source of truth for this store) ===");
+  parts.push(
+    useRag
+      ? "=== STORE KNOWLEDGE (RAG: top passages for this question + product list — your only source of truth) ==="
+      : "=== STORE KNOWLEDGE (use this as your only source of truth for this store) ==="
+  );
   if (scrapedData.title) parts.push(`Store name/title: ${scrapedData.title}`);
   if (scrapedData.url) parts.push(`Store URL (for internal reference only; do not include URLs in your replies): ${scrapedData.url.replace(/\/$/, "")}`);
   if (scrapedData.description) parts.push(`Short description: ${scrapedData.description}`);
 
   const hasUploadedDocs = scrapedData.uploadedDocsText && scrapedData.uploadedDocsText.trim().length > 0;
-  if (hasUploadedDocs) {
+  if (hasUploadedDocs && !useRag) {
     const doc = (scrapedData.uploadedDocsText ?? "").trim();
     parts.push("\nUPLOADED DOCUMENTS (from PDF/TXT the store owner provided — use this to answer product count, product names, and any facts mentioned here):");
     parts.push("When the user asks 'how many products do you have?' or similar, infer from this document (e.g. count list items, or use a number stated in the text). Answer in first person (e.g. 'We have around X products.'). Do not say 'this information is not available' if this document contains product or catalog information.");
-    parts.push(doc.length > 15000 ? doc.slice(0, 15000) + "\n[...]" : doc);
+    parts.push(doc.length > 40000 ? doc.slice(0, 40000) + "\n[...]" : doc);
+  }
+  if (useRag && hasUploadedDocs) {
+    parts.push(
+      "\n(Owner PDF/TXT files are indexed: relevant excerpts appear in RETRIEVED PASSAGES below when they match the question — not the full documents.)"
+    );
   }
 
   if (Array.isArray(scrapedData.products) && scrapedData.products.length > 0) {
@@ -116,22 +136,39 @@ function buildWebsiteContext(scrapedData: {
       const sym = prices[0]?.match(/£|€/) ? (prices[0].includes("£") ? "£" : "€") : "$";
       parts.push(`APPROXIMATE PRICE RANGE (use for rough price answers): ${sym}${low} to ${sym}${high}. When asked about price ranges, give this rough range—exact prices are not required.`);
     } else {
-      parts.push("When asked about PRICE or PRICE RANGE: use any prices mentioned in WEBSITE CONTENT below. If none, say we don't have price details in this chat and they can check our website. Do not include URLs in your reply.");
+      const priceSrc = useRag
+        ? "RETRIEVED PASSAGES, PRODUCT CATALOG, or the short description"
+        : "WEBSITE CONTENT below";
+      parts.push(
+        `When asked about PRICE or PRICE RANGE: use any prices mentioned in ${priceSrc}. If none, say we don't have price details in this chat and they can check our website. Do not include URLs in your reply.`
+      );
     }
     scrapedData.products.forEach((p, i) => {
       const name = p.name?.trim();
       if (name) parts.push(`  ${i + 1}. ${name}${p.price ? ` — ${p.price}` : ""}`);
     });
-  } else if (!hasUploadedDocs) {
+  } else if (!hasUploadedDocs && !useRag) {
     parts.push("\nPRODUCT CATALOG: (no product list in this data — use store title, description, and WEBSITE CONTENT or UPLOADED DOCUMENTS above to describe what the store sells. If WEBSITE CONTENT or UPLOADED DOCUMENTS mention a number of products or a list, use that to answer 'how many products?' when possible.)");
-  } else {
+  } else if (!useRag) {
     parts.push("\nPRODUCT CATALOG: (no scraped product list — use UPLOADED DOCUMENTS above to answer how many products, product names, and categories. Do not say information is not available if the uploaded document describes products.)");
+  } else if (useRag) {
+    parts.push(
+      "\nPRODUCT CATALOG: (no structured product list in the database—use RETRIEVED PASSAGES and store description; passages may still list products.)"
+    );
   }
 
-  if (scrapedData.content && scrapedData.content.trim().length > 0) {
+  if (useRag && opts?.ragPassages) {
+    parts.push(
+      "\nRETRIEVED PASSAGES (embeddings-matched excerpts from the site crawl, owner files, and searchable catalog text — use with PRODUCT CATALOG and counts above):"
+    );
+    opts.ragPassages.forEach((p, i) => {
+      const block = p.length > 6000 ? p.slice(0, 6000) + "\n[...]" : p;
+      parts.push(`[${i + 1}] ${block}`);
+    });
+  } else if (scrapedData.content && scrapedData.content.trim().length > 0) {
     parts.push("\nWEBSITE CONTENT (policies, FAQs, shipping, returns, general info):");
     const content = scrapedData.content.trim();
-    parts.push(content.length > 8000 ? content.slice(0, 8000) + "\n[...]" : content);
+    parts.push(content.length > 20000 ? content.slice(0, 20000) + "\n[...]" : content);
   }
 
   return parts.join("\n");
@@ -329,7 +366,34 @@ export async function POST(req: NextRequest) {
       await conn2.end();
     }
 
-    const websiteContext = buildWebsiteContext(scrapedData);
+    let websiteContext: string;
+    if (chatbotId && RAG_ENABLED && process.env.OPENAI_API_KEY) {
+      const connRag = await getDbConnection();
+      try {
+        const count = await getKnowledgeChunkCount(connRag, chatbotId);
+        if (count === 0) {
+          const hasText =
+            (scrapedData?.content?.trim().length ?? 0) > 0 ||
+            (scrapedData?.uploadedDocsText?.trim().length ?? 0) > 0 ||
+            (Array.isArray(scrapedData?.products) && scrapedData.products.length > 0);
+          if (hasText) {
+            await reindexChatbot(connRag, chatbotId);
+          }
+        }
+        const passages = await retrieveRelevantPassages(connRag, chatbotId, question);
+        websiteContext = buildWebsiteContext(
+          scrapedData,
+          passages.length > 0 ? { ragPassages: passages } : undefined
+        );
+      } catch (e) {
+        console.error("[RAG] context build failed:", e);
+        websiteContext = buildWebsiteContext(scrapedData);
+      } finally {
+        await connRag.end();
+      }
+    } else {
+      websiteContext = buildWebsiteContext(scrapedData);
+    }
     const personalityLabel = personality || "Friendly";
     const bodyGuardRails =
       typeof (body as { guardRails?: unknown }).guardRails === "string"
@@ -452,7 +516,7 @@ ${websiteContext}
         model: modelFromEnv,
         messages: [{ role: "system", content: fullPrompt }, ...historyMessages, { role: "user", content: question }],
         temperature: 0.2,
-        max_tokens: 380,
+        max_tokens: 1000,
       },
       { signal: openaiAbort.signal }
     );
