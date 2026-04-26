@@ -324,7 +324,9 @@ export async function fetchProductUrlsFromSitemap(
   const productPatterns: Record<StoreType, RegExp> = {
     shopify: /\/products\/[^/?#]+/i,
     woocommerce: /\/(product|product-category)\/[^/?#]+/i,
-    custom: /\/(product|products|item|shop|p)\/[^/?#]+/i,
+    // e.g. /collections/season/products/slug (headless/custom Shopify) or /products/slug
+    custom:
+      /\/collections\/[^/]+\/products\/[^/?#]+|\/(product|products|product-category|item|shop|store|catalog|p)\/[^/?#]+/i,
   };
   const pattern = productPatterns[storeType];
 

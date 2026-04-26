@@ -93,9 +93,131 @@ function parsePriceFromText(text: string): string | null {
   return (sym === "£" ? "£" : sym === "€" ? "€" : "$") + amount;
 }
 
-function extractProductsFromHomepage($: ReturnType<typeof load>): { name: string; price?: string }[] {
+/** Pull Product nodes from JSON-LD (many modern sites, including headless/commerce) */
+function extractProductsFromJsonLd(
+  fullHtml: string,
+  pageBase: string
+): { name: string; price?: string; url?: string }[] {
+  const out: { name: string; price?: string; url?: string }[] = [];
+  const seen = new Set<string>();
+  const scriptRe = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  const resolveUrl = (u: string | undefined): string | undefined => {
+    if (!u || typeof u !== "string") return undefined;
+    const t = u.trim();
+    if (!t) return undefined;
+    if (t.startsWith("http://") || t.startsWith("https://")) return t;
+    try {
+      return new URL(t, pageBase).href;
+    } catch {
+      return undefined;
+    }
+  };
+  const priceFromOffer = (off: unknown): string | undefined => {
+    if (!off || typeof off !== "object") return undefined;
+    const o = off as Record<string, unknown>;
+    const p = o.price;
+    if (p != null && (typeof p === "string" || typeof p === "number")) return String(p);
+    const ag = o.priceSpecification;
+    if (Array.isArray(ag)) {
+      for (const x of ag) {
+        if (x && typeof x === "object") {
+          const pr = (x as { price?: string | number }).price;
+          if (pr != null) return String(pr);
+        }
+      }
+    } else if (ag && typeof ag === "object") {
+      const pr = (ag as { price?: string | number }).price;
+      if (pr != null) return String(pr);
+    }
+    return undefined;
+  };
+  const isProductType = (t: unknown): boolean => {
+    if (t === undefined || t === null) return false;
+    const ok = (s: string) => {
+      const u = s.trim();
+      return (
+        u === "Product" ||
+        u === "https://schema.org/Product" ||
+        u === "http://schema.org/Product" ||
+        /(^|\/)Product$/i.test(u)
+      ) && !/ProductGroup|ProductModel/i.test(u);
+    };
+    if (Array.isArray(t)) return t.some((x) => typeof x === "string" && ok(x));
+    return typeof t === "string" && ok(t);
+  };
+  const recordProduct = (obj: Record<string, unknown>) => {
+    let name = "";
+    if (typeof obj.name === "string") name = obj.name;
+    else if (Array.isArray(obj.name) && typeof obj.name[0] === "string") name = obj.name[0];
+    else if (typeof obj.headline === "string") name = obj.headline;
+    name = name.replace(/\s+/g, " ").trim();
+    if (name.length < 2 || name.length > 200) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    let url: string | undefined;
+    if (typeof obj.url === "string") url = resolveUrl(obj.url);
+    else if (typeof obj["@id"] === "string" && obj["@id"].startsWith("http")) url = obj["@id"];
+    else if (typeof obj.sameAs === "string") url = resolveUrl(obj.sameAs);
+    let price: string | undefined;
+    if (obj.offers) {
+      const off = (Array.isArray(obj.offers) ? obj.offers[0] : obj.offers) as Record<string, unknown> | undefined;
+      price = off ? priceFromOffer(off) : undefined;
+    }
+    out.push(price ? { name, price, url } : { name, url });
+  };
+  const walk = (node: unknown, depth: number) => {
+    if (depth > 14 || node === null || node === undefined) return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x, depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    if (Array.isArray(obj["@graph"])) {
+      for (const g of obj["@graph"]) walk(g, depth + 1);
+    }
+    if (isProductType(obj["@type"])) {
+      recordProduct(obj);
+    }
+    if (/\bItemList\b/i.test(String(obj["@type"] ?? "")) && obj.itemListElement) {
+      walk(obj.itemListElement, depth + 1);
+    }
+    if (obj.hasVariant) walk(obj.hasVariant, depth + 1);
+  };
+
+  while ((m = scriptRe.exec(fullHtml)) !== null) {
+    const raw = m[1].trim();
+    if (!raw) continue;
+    try {
+      const data = JSON.parse(raw) as unknown;
+      walk(data, 0);
+    } catch {
+      /* non-JSON or truncated */
+    }
+  }
+  return out;
+}
+
+function extractProductsFromHomepage(
+  $: ReturnType<typeof load>,
+  pageBase: string
+): { name: string; price?: string; url?: string }[] {
   const products: { name: string; price?: string; url?: string }[] = [];
   const seenNames = new Set<string>();
+
+  try {
+    const rawHtml = $.html();
+    for (const p of extractProductsFromJsonLd(rawHtml, pageBase)) {
+      if (!seenNames.has(p.name)) {
+        seenNames.add(p.name);
+        products.push(p);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 
   // 1) Schema.org Product: get name + price from same block
   $('[itemtype*="Product"]').each((_, block) => {
@@ -371,7 +493,7 @@ export async function POST(req: NextRequest) {
       if (products.length === 0) {
         try {
           const r = await fetchWithTimeout(url);
-          if (r.ok) products = extractProductsFromHomepage(load(await r.text()));
+          if (r.ok) products = extractProductsFromHomepage(load(await r.text()), baseUrlForContact);
         } catch {
           /* keep empty */
         }
@@ -489,7 +611,7 @@ export async function POST(req: NextRequest) {
     }
 
     let finalContent = buildContentFromCheerio($) + extractContactFromPage($, baseUrlForContact);
-    const products = extractProductsFromHomepage($);
+    const products = extractProductsFromHomepage($, baseUrlForContact);
     try {
       finalContent = await appendInfoPolicyPages(url, finalContent, fetchWithTimeout, baseUrlForContact);
     } catch (e) {
