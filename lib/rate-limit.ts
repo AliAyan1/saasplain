@@ -48,4 +48,5 @@ export const LIMITS = {
   chat: 60,     // chat messages per IP per minute
   scrape: 5,    // scrape per IP per minute
   upload: 10,   // knowledge upload per IP per minute
+  convMessages: 60, // hydrate thread per IP per minute (widget refresh)
 } as const;

@@ -95,7 +95,7 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
               }))
             );
           }
-        } else {
+        } else if (r.status === 404) {
           try {
             localStorage.removeItem(key);
           } catch {

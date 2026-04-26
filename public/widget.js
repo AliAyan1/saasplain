@@ -165,6 +165,27 @@
 
     applyWidgetAccent(accentHex, btn, send, input);
 
+    function escapeHtmlW(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function linkifyForWidget(raw) {
+      var e = escapeHtmlW(raw);
+      return e.replace(/(https?:\/\/[^\s<]+?)(?=[\s<]|$)/g, function (u) {
+        var href = u.replace(/[.,;:!?)\]']+$/g, "");
+        return (
+          '<a href="' +
+          href +
+          '" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:underline;word-break:break-all;">' +
+          u +
+          "</a>"
+        );
+      });
+    }
+
     function addMsg(role, text) {
       var p = document.createElement("p");
       p.className = "ecom-widget-msg " + role;
@@ -172,6 +193,45 @@
       messagesDiv.appendChild(p);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
+
+    function addAssistantMessage(content) {
+      var p = document.createElement("p");
+      p.className = "ecom-widget-msg assistant";
+      if (content && String(content).indexOf("http") >= 0) {
+        p.innerHTML = linkifyForWidget(content);
+      } else {
+        p.textContent = content;
+      }
+      messagesDiv.appendChild(p);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function hydrateThreadFromServer() {
+      if (!conversationId) return;
+      fetch(
+        base +
+          "/api/conversations/messages?conversationId=" +
+          encodeURIComponent(conversationId) +
+          "&chatbotId=" +
+          encodeURIComponent(botId),
+        { method: "GET", mode: "cors" }
+      )
+        .then(function (r) {
+          if (!r.ok) return null;
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data || !Array.isArray(data.messages) || data.messages.length === 0) return;
+          messagesDiv.innerHTML = "";
+          data.messages.forEach(function (m) {
+            if (m.role === "user") addMsg("user", m.content || "");
+            else addAssistantMessage(m.content || "");
+          });
+          pollSupportReply();
+        })
+        .catch(function () {});
+    }
+    hydrateThreadFromServer();
 
     function addNoteMsg(text) {
       var wrap = document.createElement("div");
@@ -279,27 +339,6 @@
           var last = messagesDiv.querySelector(".ecom-widget-msg.assistant:last-child");
           if (last) last.textContent = "";
           var streamBuf = "";
-          function escapeHtmlW(s) {
-            return String(s)
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/"/g, "&quot;");
-          }
-          function linkifyForWidget(raw) {
-            var e = escapeHtmlW(raw);
-            return e.replace(
-              /(https?:\/\/[^\s<]+?)(?=[\s<]|$)/g,
-              function (u) {
-                var href = u.replace(/[.,;:!?)\]']+$/g, "");
-                return (
-                  '<a href="' + href + '" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:underline;word-break:break-all;">' +
-                  u +
-                  "</a>"
-                );
-              }
-            );
-          }
           var reader = res.body.getReader();
           function read() {
             reader.read().then(function (r) {
