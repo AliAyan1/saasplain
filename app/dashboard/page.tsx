@@ -60,6 +60,8 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  /** When user has no chatbot yet, where “Connect store” should go (onboarding first incomplete step). */
+  const [connectOnboardingPath, setConnectOnboardingPath] = useState<string | null>(null);
 
   const totalConversations = stats?.totalConversations ?? 0;
   const statsUnlimited = stats?.unlimited ?? false;
@@ -85,19 +87,37 @@ function DashboardContent() {
         if (cancelled) return;
         if (botRes.ok) {
           const botData = await botRes.json();
+          const chatbots = Array.isArray(botData.chatbots) ? botData.chatbots : [];
           if (Array.isArray(botData.chatbots)) setStores(botData.chatbots);
           if (botData.storeLimit !== undefined) setStoreLimit(botData.storeLimit);
-          if (botData.chatbot) {
-            const c = botData.chatbot;
-            setChatbotId(c.id);
-            setScrapedData({
-              url: c.websiteUrl || "",
-              title: c.websiteTitle || "",
-              description: c.websiteDescription || "",
-              content: c.websiteContent || "",
-              products: c.products || [],
-            });
-            setPersonality(c.personality || "Friendly");
+          if (chatbots.length === 0) {
+            setChatbotId(null);
+            const [stRes, feRes] = await Promise.all([fetch("/api/users/store-type"), fetch("/api/users/forward-email")]);
+            const storeType = stRes.ok ? (await stRes.json()).storeType as string | null | undefined : null;
+            const forwardEmail = feRes.ok ? (await feRes.json()).forwardEmail as string | null | undefined : null;
+            const hasStoreType = Boolean(storeType && String(storeType).trim());
+            const hasForwardEmail = Boolean(forwardEmail && String(forwardEmail).trim());
+            if (!hasStoreType) {
+              setConnectOnboardingPath("/onboarding/store-type");
+            } else if (!hasForwardEmail) {
+              setConnectOnboardingPath("/onboarding/forward-email");
+            } else {
+              setConnectOnboardingPath("/create-bot");
+            }
+          } else {
+            setConnectOnboardingPath(null);
+            if (botData.chatbot) {
+              const c = botData.chatbot;
+              setChatbotId(c.id);
+              setScrapedData({
+                url: c.websiteUrl || "",
+                title: c.websiteTitle || "",
+                description: c.websiteDescription || "",
+                content: c.websiteContent || "",
+                products: c.products || [],
+              });
+              setPersonality(c.personality || "Friendly");
+            }
           }
         }
         if (ticketsRes.ok) {
@@ -243,7 +263,7 @@ function DashboardContent() {
     }
   };
 
-  const showAgencyOnboarding = userPlan === "agency" && !loading && !chatbotId;
+  const showConnectStoreBanner = !loading && connectOnboardingPath !== null;
   const limitReached = !loading && stats && !stats.unlimited && (stats.remaining ?? 0) <= 0;
 
   const nearThreshold =
@@ -273,6 +293,26 @@ function DashboardContent() {
           <p className="mb-4 rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-2 text-sm text-red-300">
             {upgradeError}
           </p>
+        )}
+
+        {showConnectStoreBanner && connectOnboardingPath && (
+          <Card className="mb-8 border-primary-500/50 bg-gradient-to-br from-primary-500/15 to-slate-900/80">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-100">Connect your store to finish setup</h2>
+                <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                  You&apos;re signed in, but there&apos;s no store connected yet. Complete the short steps
+                  (store type, support email, then your website) so your chatbot can go live. Click below
+                  to continue from the first step you still need.
+                </p>
+              </div>
+              <Link href={connectOnboardingPath} className="shrink-0">
+                <Button variant="primary" className="w-full min-w-[200px] sm:w-auto">
+                  Connect store
+                </Button>
+              </Link>
+            </div>
+          </Card>
         )}
 
         {showFreeNearLimit && (
@@ -358,18 +398,6 @@ function DashboardContent() {
                 </Button>
               </Link>
             )}
-          </Card>
-        )}
-
-        {showAgencyOnboarding && (
-          <Card className="mb-8 border-primary-500/30 bg-primary-500/10">
-            <h2 className="text-lg font-semibold text-primary-400">Create your first chatbot</h2>
-            <p className="mt-2 text-slate-300">
-              You&apos;re on Agency — add a store URL and go live from your dashboard whenever you&apos;re ready. Your install snippet appears here once a chatbot exists.
-            </p>
-            <Link href="/create-bot" className="mt-4 inline-block">
-              <Button variant="primary">Create chatbot</Button>
-            </Link>
           </Card>
         )}
 
