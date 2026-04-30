@@ -10,6 +10,7 @@ import { formatAssistantMessageForDisplay } from "@/lib/format-assistant-message
 
 const SITEMAP_INITIAL = 4;
 const PRODUCTS_INITIAL = 6;
+const DEPLOY_MARKER = "deploy-marker-2026-04-30-1";
 
 function statusClass(status: string) {
   if (status === "Fully trained") return "bg-emerald-500/15 text-emerald-300";
@@ -72,6 +73,9 @@ export default function TrainingDataContent() {
           <h1 className="text-2xl font-bold text-slate-100">
             Website feeds and sitemap
           </h1>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Deploy marker: <span className="font-medium text-slate-300">{DEPLOY_MARKER}</span>
+          </p>
           <p className="mt-2 text-sm text-slate-400">
             Visual overview of pages crawled, product inventory, and an
             AI-generated feed of your website content. All stored locally in
