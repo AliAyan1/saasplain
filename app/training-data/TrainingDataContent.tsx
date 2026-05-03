@@ -41,7 +41,7 @@ export default function TrainingDataContent() {
   const websiteFeedFormatted = websiteFeed
     ? formatAssistantMessageForDisplay(websiteFeed)
     : "";
-  const scrapeFailed = searchParams.get("scrape") === "failed";
+  const scrapeFailed = searchParams?.get("scrape") === "failed";
   const hasDocsOrCatalog = Boolean(products || (scrapedData?.content && scrapedData.content.trim().length > 0));
 
   return (
