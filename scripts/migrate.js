@@ -472,6 +472,38 @@ async function run() {
       console.log("user_external_endpoints already exists, skip.");
     }
 
+    // Live agent takeover (conversations.handoff_mode, chat_messages.role includes agent)
+    if (!(await hasColumn(conn, "conversations", "handoff_mode"))) {
+      console.log("Adding conversations.handoff_mode...");
+      await conn.execute(
+        "ALTER TABLE conversations ADD COLUMN handoff_mode VARCHAR(16) NOT NULL DEFAULT 'ai'"
+      );
+      console.log("  OK");
+    } else {
+      console.log("conversations.handoff_mode already exists, skip.");
+    }
+    if (!(await hasColumn(conn, "conversations", "assigned_agent_id"))) {
+      console.log("Adding conversations.assigned_agent_id...");
+      await conn.execute("ALTER TABLE conversations ADD COLUMN assigned_agent_id CHAR(36) NULL");
+      console.log("  OK");
+    } else {
+      console.log("conversations.assigned_agent_id already exists, skip.");
+    }
+    const [roleColRows] = await conn.execute(
+      "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'chat_messages' AND COLUMN_NAME = 'role'",
+      [database]
+    );
+    const roleType = roleColRows && roleColRows[0] ? String(roleColRows[0].COLUMN_TYPE || "").toLowerCase() : "";
+    if (roleType && roleType.indexOf("agent") === -1) {
+      console.log("Extending chat_messages.role enum (agent)...");
+      await conn.execute(
+        "ALTER TABLE chat_messages MODIFY COLUMN role ENUM('user', 'assistant', 'agent') NOT NULL"
+      );
+      console.log("  OK");
+    } else {
+      console.log("chat_messages.role already includes agent, skip.");
+    }
+
     console.log("\nMigrations finished.");
   } finally {
     await conn.end();

@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
 
     const conn = await getDbConnection();
     const [rows] = await conn.execute(
-      `SELECT reply_text AS replyText, replied_at AS repliedAt, created_at AS forwardedAt
+      `SELECT reply_text AS replyText, replied_at AS repliedAt, created_at AS forwardedAt,
+              customer_email AS customerEmail
        FROM forwarded_conversations
        WHERE conversation_id = ?
        ORDER BY created_at DESC
@@ -24,7 +25,12 @@ export async function GET(req: NextRequest) {
     );
     await conn.end();
 
-    const row = (rows as { replyText: string | null; repliedAt: string | null; forwardedAt: string }[])[0];
+    const row = (rows as {
+      replyText: string | null;
+      repliedAt: string | null;
+      forwardedAt: string;
+      customerEmail: string | null;
+    }[])[0];
     if (!row) {
       return NextResponse.json(
         {
@@ -32,13 +38,15 @@ export async function GET(req: NextRequest) {
           repliedAt: null,
           forwardedAt: null,
           forwardPending: false,
+          needsForm: false,
         },
         { headers: corsHeaders }
       );
     }
 
     const hasReply = Boolean(row.repliedAt) || (Boolean(row.replyText) && String(row.replyText).trim().length > 0);
-    const forwardPending = !hasReply;
+    const needsForm = !hasReply && !row.customerEmail?.trim();
+    const forwardPending = !hasReply && !needsForm;
 
     return NextResponse.json(
       {
@@ -46,6 +54,7 @@ export async function GET(req: NextRequest) {
         repliedAt: row.repliedAt,
         forwardedAt: row.forwardedAt,
         forwardPending,
+        needsForm,
       },
       { headers: corsHeaders }
     );

@@ -41,7 +41,9 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
   const [forwardName, setForwardName] = useState("");
   const [forwardEmail, setForwardEmail] = useState("");
   const [forwardOrderRef, setForwardOrderRef] = useState("");
+  const [forwardMessage, setForwardMessage] = useState("");
   const [forwardSubmitting, setForwardSubmitting] = useState(false);
+  const [forwardFormSubmitted, setForwardFormSubmitted] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const greetingSentRef = useRef(false);
   const conversationIdRef = useRef<string | null>(null);
@@ -53,6 +55,9 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
   const [ticketResolved, setTicketResolved] = useState(false);
   const [embedAccent, setEmbedAccent] = useState<string | null>(null);
   const [chatHydrated, setChatHydrated] = useState(false);
+  const [handoffMode, setHandoffMode] = useState<"ai" | "human">("ai");
+  const lastSyncSinceRef = useRef<string>("");
+  const syncedMsgIdsRef = useRef<Set<string>>(new Set());
 
   // Restore conversation id + messages from the server after refresh (stays in sync with the API)
   useEffect(() => {
@@ -83,13 +88,20 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
         );
         if (cancelled) return;
         if (r.ok) {
-          const d = (await r.json()) as { messages?: { id: string; role: "user" | "assistant"; content: string }[] };
+          const d = (await r.json()) as {
+            messages?: { id: string; role: string; content: string; createdAt?: string }[];
+            handoffMode?: "ai" | "human";
+          };
+          if (d.handoffMode) setHandoffMode(d.handoffMode);
           const list = d.messages;
           if (Array.isArray(list) && list.length > 0) {
+            syncedMsgIdsRef.current = new Set(list.map((m) => m.id));
+            const tail = list[list.length - 1];
+            if (tail?.createdAt) lastSyncSinceRef.current = tail.createdAt;
             setMessages(
               list.map((m, i) => ({
                 id: m.id || `sync_${i}_${Date.now()}`,
-                role: m.role,
+                role: m.role === "user" || m.role === "assistant" || m.role === "agent" ? m.role : "assistant",
                 content: m.content,
                 createdAt: Date.now() + i,
               }))
@@ -116,6 +128,9 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
   }, [chatbotId, setMessages]);
 
   const clearChat = () => {
+    lastSyncSinceRef.current = "";
+    syncedMsgIdsRef.current = new Set();
+    setHandoffMode("ai");
     try {
       const cid = conversationIdRef.current;
       if (cid && chatbotId) {
@@ -195,7 +210,11 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
           repliedAt?: string | null;
           forwardPending?: boolean;
           forwardedAt?: string | null;
+          needsForm?: boolean;
         }) => {
+          if (data.needsForm && !forwardFormSubmitted) {
+            setShowForwardForm(true);
+          }
           if (data.replyText && data.replyText !== lastReplyShownRef.current) {
             lastReplyShownRef.current = data.replyText;
             const id = addMessage({
@@ -237,10 +256,52 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
     return () => clearInterval(t);
   }, [messages.length, addMessage, chatbotId]);
 
+  // Real-time sync: agent messages + resume-AI notice from server
+  useEffect(() => {
+    const cid = conversationIdRef.current;
+    if (!cid || !chatbotId) return;
+
+    const sync = () => {
+      const sinceQ = lastSyncSinceRef.current
+        ? `&since=${encodeURIComponent(lastSyncSinceRef.current)}`
+        : "";
+      fetch(
+        `/api/conversations/messages?conversationId=${encodeURIComponent(cid)}&chatbotId=${encodeURIComponent(chatbotId)}${sinceQ}`
+      )
+        .then((r) => r.json())
+        .then(
+          (data: {
+            messages?: { id: string; role: string; content: string; createdAt?: string }[];
+            handoffMode?: "ai" | "human";
+          }) => {
+            if (data.handoffMode) setHandoffMode(data.handoffMode);
+            const incoming = data.messages || [];
+            incoming.forEach((m) => {
+              if (syncedMsgIdsRef.current.has(m.id)) return;
+              syncedMsgIdsRef.current.add(m.id);
+              const role =
+                m.role === "user" || m.role === "assistant" || m.role === "agent" ? m.role : "assistant";
+              const mid = addMessage({ role, content: m.content });
+              if (m.role === "agent") {
+                setSupportReplyIds((prev) => new Set(Array.from(prev).concat(mid)));
+              }
+            });
+            const tail = incoming[incoming.length - 1];
+            if (tail?.createdAt) lastSyncSinceRef.current = tail.createdAt;
+          }
+        )
+        .catch(() => {});
+    };
+
+    sync();
+    const t = setInterval(sync, 3000);
+    return () => clearInterval(t);
+  }, [chatbotId, addMessage, messages.length]);
+
   const handleForwardToEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     const cid = conversationIdRef.current;
-    if (!cid || !chatbotId) {
+    if (!cid) {
       setError("Start the conversation first so we can forward it.");
       return;
     }
@@ -257,18 +318,20 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
         .map((m) => `${m.role === "user" ? "Customer" : "Assistant"}: ${m.content}`)
         .join("\n");
       const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      const res = await fetch("/api/forwarded", {
+      const payload = {
+        conversationId: cid,
+        customer: name,
+        customerEmail: email,
+        orderRef: forwardOrderRef.trim() || null,
+        customerMessage: forwardMessage.trim() || null,
+        preview: lastUser?.content?.slice(0, 200) || forwardMessage.trim() || "Support request",
+        conversationText,
+        ...(chatbotId ? { chatbotId } : {}),
+      };
+      const res = await fetch(chatbotId ? "/api/forwarded/submit" : "/api/forwarded", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId: cid,
-          chatbotId,
-          customer: name,
-          customerEmail: email,
-          orderRef: forwardOrderRef.trim() || null,
-          preview: lastUser?.content?.slice(0, 200) || "Conversation",
-          conversationText,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -276,12 +339,15 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
       }
       addMessage({
         role: "assistant",
-        content: "Wait, our team is reviewing your request. You'll see their reply here when they respond.",
+        content:
+          "Thanks — we've sent your details to our team. You'll see their reply here when they respond.",
       });
+      setForwardFormSubmitted(true);
       setShowForwardForm(false);
       setForwardName("");
       setForwardEmail("");
       setForwardOrderRef("");
+      setForwardMessage("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to forward");
     } finally {
@@ -301,7 +367,9 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
     }
 
     const userId = addMessage({ role: "user", content: question });
+    syncedMsgIdsRef.current.add(userId);
     const assistantId = addMessage({ role: "assistant", content: "" });
+    syncedMsgIdsRef.current.add(assistantId);
     setInput("");
     setLoading(true);
 
@@ -369,6 +437,9 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
       }
       const ref = res.headers.get("X-Ticket-Ref");
       if (ref) setCurrentTicketRef(ref);
+      if (res.headers.get("X-Needs-Forward-Form") === "1" || res.headers.get("X-Forwarded-Support") === "1") {
+        setShowForwardForm(true);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -504,9 +575,10 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
-        {showForwardForm && chatbotId && (
+        {showForwardForm && !forwardFormSubmitted && conversationIdRef.current && (
           <form onSubmit={handleForwardToEmail} className="mb-3 rounded-lg border border-slate-700 bg-slate-800/80 p-3 space-y-2">
-            <p className="text-xs font-medium text-slate-200">Forward this conversation to support</p>
+            <p className="text-xs font-medium text-slate-200">Contact our team</p>
+            <p className="text-[11px] text-slate-400">We&apos;ll email your details and full chat to support.</p>
             <input
               type="text"
               placeholder="Your name"
@@ -529,6 +601,13 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
               onChange={(e) => setForwardOrderRef(e.target.value)}
               className="w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
             />
+            <textarea
+              placeholder="How can we help? (optional)"
+              value={forwardMessage}
+              onChange={(e) => setForwardMessage(e.target.value)}
+              rows={2}
+              className="w-full resize-none rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+            />
             <div className="flex gap-2">
               <Button type="submit" variant="primary" className="px-3 py-1.5 text-xs" disabled={forwardSubmitting}>
                 {forwardSubmitting ? "Sending…" : "Send to support"}
@@ -548,7 +627,12 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
             , try again or use a different URL, then come back here. You can also keep chatting with a generic assistant below.
           </div>
         )}
-        {personality && (
+        {handoffMode === "human" && (
+          <div className="mb-2 rounded-lg border border-emerald-500/35 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
+            A team member is chatting with you. Messages go to them in real time.
+          </div>
+        )}
+        {personality && handoffMode === "ai" && (
           <div className="mb-1 text-xs text-slate-400">
             Personality: <span className="font-semibold text-slate-200">{personality}</span>
           </div>
@@ -565,7 +649,8 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
         )}
 
         {messages.map((m, idx) => {
-          const isSupportReply = supportReplyIds.has(m.id);
+          const isAgentMsg = m.role === "agent";
+          const isSupportReply = supportReplyIds.has(m.id) || isAgentMsg;
           const replyMeta = supportReplyMeta.get(m.id);
           const isWaitNotice = m.role === "assistant" && m.content.startsWith(SUPPORT_WAIT_PREFIX);
           const isFirstUserMessage = m.role === "user" && messages.findIndex((x) => x.role === "user") === idx;
@@ -587,7 +672,7 @@ export default function ChatPanel({ compact = false, embed = false }: ChatPanelP
                 <div className="flex justify-start">
                   <div className="max-w-[85%] rounded-xl border border-sky-500/40 bg-sky-950/50 px-4 py-3">
                     <div className="flex items-center gap-2 text-xs font-medium text-sky-400">
-                      <span>Support reply</span>
+                      <span>{isAgentMsg ? "Team member" : "Support reply"}</span>
                       {replyMeta?.repliedAt && (
                         <span className="text-slate-500 font-normal">
                           {new Date(replyMeta.repliedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}

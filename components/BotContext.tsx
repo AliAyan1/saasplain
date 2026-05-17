@@ -18,7 +18,7 @@ export type Personality =
   | "Sales-focused"
   | "Premium Luxury";
 
-export type ChatRole = "user" | "assistant";
+export type ChatRole = "user" | "assistant" | "agent";
 
 export interface ChatMessage {
   id: string;

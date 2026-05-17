@@ -12,6 +12,8 @@ import {
   getKnowledgeChunkCount,
 } from "@/lib/rag";
 import { extractFirstEmailFromMessages } from "@/lib/extract-email";
+import { createPendingForwardFromChat } from "@/lib/forward-to-support";
+import { getHandoffMode, toOpenAIHistoryMessages } from "@/lib/conversation-handoff";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -106,7 +108,12 @@ function buildWebsiteContext(
       : "=== STORE KNOWLEDGE (use this as your only source of truth for this store) ==="
   );
   if (scrapedData.title) parts.push(`Store name/title: ${scrapedData.title}`);
-  if (scrapedData.url) parts.push(`Store base URL (use for building links to pages on this site; must match this host): ${scrapedData.url.replace(/\/$/, "")}`);
+  if (scrapedData.url) {
+    const base = scrapedData.url.replace(/\/$/, "");
+    parts.push(
+      `Store base URL (share this when the user should browse the shop; only use paths/URLs from this host or listed below): ${base}`
+    );
+  }
   if (scrapedData.description) parts.push(`Short description: ${scrapedData.description}`);
 
   const hasUploadedDocs = scrapedData.uploadedDocsText && scrapedData.uploadedDocsText.trim().length > 0;
@@ -146,18 +153,18 @@ function buildWebsiteContext(
         ? "RETRIEVED PASSAGES, PRODUCT CATALOG, or the short description"
         : "WEBSITE CONTENT below";
       parts.push(
-        `When asked about PRICE or PRICE RANGE: use any prices mentioned in ${priceSrc}. If none, say we don't have price details in this chat. You may add one product page link from PRODUCT & PAGE URLs if it helps.`
+        `When asked about PRICE or PRICE RANGE: use any prices mentioned in ${priceSrc}. If none, say we don't have price details in this chat. Include product page link(s) from the catalog when URLs are listed below.`
       );
     }
     parts.push(
-      "\nYou may add exact page links only when it helps (e.g. “see this product”, policy pages, contact). Use markdown [link text](https://...) or a plain https URL. Most replies should have no links. Only use URLs that appear in this product list, RETRIEVED PASSAGES, or the store base URL (same hostname)."
+      "\nLINKS (required for product questions): When the user asks about a product, product details, price of a named item, what you sell, or categories — include the product page URL from this list for every product you mention (markdown [Product name](https://...) or plain https URL). Up to 6 links per reply when listing several items. Only use URLs listed here, in RETRIEVED PASSAGES, or the store base URL above — never invent paths."
     );
     scrapedData.products.forEach((p, i) => {
       const name = p.name?.trim();
       if (name) {
         const u = p.url?.trim();
         parts.push(
-          `  ${i + 1}. ${name}${p.price ? ` — ${p.price}` : ""}${u ? ` | ${u}` : ""}`
+          `  ${i + 1}. ${name}${p.price ? ` — ${p.price}` : ""}${u ? ` | Page: ${u}` : " | (no product page URL in data)"}`
         );
       }
     });
@@ -175,7 +182,7 @@ function buildWebsiteContext(
 
   if (useRag && opts?.ragPassages) {
     parts.push(
-      "\nRETRIEVED PASSAGES (embeddings-matched excerpts from the site crawl, owner files, and searchable catalog text — use with PRODUCT CATALOG and counts above):"
+      "\nRETRIEVED PASSAGES (embeddings-matched excerpts from the site crawl, owner files, and searchable catalog text — use with PRODUCT CATALOG and counts above; include any https URLs from these passages when answering about products, policies, or pages):"
     );
     opts.ragPassages.forEach((p, i) => {
       const block = p.length > 6000 ? p.slice(0, 6000) + "\n[...]" : p;
@@ -383,6 +390,50 @@ export async function POST(req: NextRequest) {
       await conn2.end();
     }
 
+    if (persistMessages && conversationId) {
+      const connHandoff = await getDbConnection();
+      let handoffMode: "ai" | "human" = "ai";
+      try {
+        handoffMode = await getHandoffMode(connHandoff, conversationId);
+      } finally {
+        await connHandoff.end();
+      }
+      if (handoffMode === "human") {
+        const ack =
+          "Thanks for your message — a team member is handling this chat and will reply here shortly.";
+        const assistantMsgId = randomUUID();
+        const connAck = await getDbConnection();
+        try {
+          await connAck.execute(
+            "INSERT INTO chat_messages (id, conversation_id, role, content) VALUES (?, ?, 'assistant', ?)",
+            [assistantMsgId, conversationId, ack]
+          );
+        } finally {
+          await connAck.end();
+        }
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(ack));
+            controller.close();
+          },
+        });
+        const headers: Record<string, string> = {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Expose-Headers":
+            "X-Conversation-Id, X-Ticket-Ref, X-Handoff-Mode, X-Forwarded-Support, X-Forwarded-At, X-Needs-Forward-Form",
+          "X-Handoff-Mode": "human",
+        };
+        if (conversationId) headers["X-Conversation-Id"] = conversationId;
+        if (ticketRef) headers["X-Ticket-Ref"] = ticketRef;
+        return new Response(stream, { headers });
+      }
+    }
+
     let websiteContext: string;
     if (chatbotId && RAG_ENABLED && process.env.OPENAI_API_KEY) {
       const connRag = await getDbConnection();
@@ -442,20 +493,26 @@ FORMATTING AND LENGTH (chat widget):
 
 Your knowledge base is limited to the WEBSITE DATA below. Provide accurate, helpful responses based only on that data.
 
-VOICE AND LINKS (URLs):
-- Always speak as the store: "We offer...", "On our website we have...", "We sell these types of...". Describe what we offer and what we have.
-- You MAY include 0–2 links when it truly helps the customer (e.g. a specific product page, shipping policy, contact page) using only URLs that appear in the WEBSITE DATA (product lines, store base URL, or retrieved passages). Use markdown [descriptive label](https://full-url) or a plain https URL. Do not put links in every message—greetings, simple yes/no, and most policy summaries need no link.
-- Never invent or guess a path; if no URL is in the data, describe in words only (no “visit our site” with a made-up link).
+VOICE AND LINKS (URLs) — include links when relevant:
+- Always speak as the store: "We offer...", "On our website we have...", "We sell these types of...".
+- When the user asks about a product, product details, a named item, prices, what you sell, categories, or where to buy/view something on the site: you MUST include clickable links using only URLs from WEBSITE DATA (product "Page:" lines, store base URL, or RETRIEVED PASSAGES).
+  - One specific product → include that product's page URL.
+  - Several products → include a link for each product you name (up to 6 links in one reply).
+  - No product URL in data but store base URL exists → include the store base URL so they can browse.
+- For shipping, returns, contact, FAQ, or policy questions: include the matching page URL when it appears in WEBSITE DATA.
+- Format: plain https://full-url (preferred) or markdown [short label](https://full-url).
+- Greetings and simple yes/no need no links.
+- Never invent or guess a path; if no URL exists in the data, describe in words only (no fake “visit our site” link).
 
-PRIORITIES (in order): 1. Clear, scannable formatting  2. Accuracy  3. Brevity  4. Relevance
+PRIORITIES (in order): 1. Relevant links when the question is about products/pages  2. Clear, scannable formatting  3. Accuracy  4. Brevity
 
 RESPONSE RULES:
 - Never fabricate missing information (e.g. do not invent product names or prices that are not in the data).
 - When the user asks "how many products do you have?" or "how many products?": use the PRODUCT COUNT or count the items in the PRODUCT CATALOG below. Answer in first person (e.g. "We have X products."). Do NOT say "not available" if the catalog lists any products.
 - When the user asks about product TYPES, CATEGORIES, or what we sell: answer in first person (e.g. "We offer...", "On our website we have...") and infer from the PRODUCT CATALOG and WEBSITE CONTENT. Summarize types/categories. Do not say "not available" if you can reasonably derive types from the list or content.
-- When the user asks about PRICE or PRICE RANGE: give a rough range in first person (e.g. "Our products are typically in the $X–$Y range"). Use APPROXIMATE PRICE RANGE or prices in the data. A product link is optional and only if a URL exists in the data.
-- Maximize small data: infer types, categories, and price level when possible. Give concise answers. Add links only when useful, not by default.
-- Only if the question asks for something truly not present in the data, say briefly that this detail is not in the content you have (e.g. exact product count, a specific price)—honest and neutral. You may suggest they browse the shop or use contact details from the WEBSITE DATA if present.
+- When the user asks about PRICE or PRICE RANGE: give a rough range in first person (e.g. "Our products are typically in the $X–$Y range"). Use APPROXIMATE PRICE RANGE or prices in the data. Include product page link(s) when URLs exist in the catalog.
+- Maximize small data: infer types, categories, and price level when possible. Give concise answers with links to the relevant pages when URLs are in the data.
+- Only if the question asks for something truly not present in the data, say briefly that this detail is not in the content you have (e.g. exact product count, a specific price)—honest and neutral. If store base URL or a shop link exists in WEBSITE DATA, include it so they can browse.
 - Do not speculate about unrelated topics. Do not say "based on the provided content" or mention training data.
 
 WHEN YOU CANNOT ANSWER (missing data) — critical:
@@ -465,15 +522,15 @@ WHEN YOU CANNOT ANSWER (missing data) — critical:
 
 INTELLIGENT EXTRACTION:
 - Extract relevant parts from the data; summarize cleanly; remove redundancy.
-- Keep important details: product names, types/categories, prices, features, contact details, policies. Optional: include vetted links from the data (see VOICE AND LINKS).
+- Keep important details: product names, types/categories, prices, features, contact details, policies — and the matching page URLs from WEBSITE DATA when the user would benefit from visiting the site (see VOICE AND LINKS).
 
 STRUCTURED ANSWERING:
 
-If the question relates to products, types, or price → answer as the store: (1) What we offer (types/categories). (2) Rough price range when you have it. (3) Product names or features when relevant. (4) Add a product page link only if the list includes a URL and it helps. Use PRODUCT CATALOG and WEBSITE DATA below.
+If the question relates to products, types, or price → answer as the store: (1) What we offer (types/categories). (2) Rough price range when you have it. (3) Product names or features when relevant. (4) Include product page link(s) for every product you mention when URLs are in PRODUCT CATALOG. Use PRODUCT CATALOG and WEBSITE DATA below.
 
-If the question relates to services → provide: Service name • What it includes • Who it is for (only from the data).
+If the question relates to services → provide: Service name • What it includes • Who it is for • Link to the service or relevant page when a URL is in WEBSITE DATA.
 
-If the question relates to contact → provide: Email • Phone • Address • Social links (use the CONTACT / REACH THE STORE section below when present).
+If the question relates to contact → provide: Email • Phone • Address • Social links • Link to contact/about page when a URL is in WEBSITE DATA (use CONTACT / REACH THE STORE section below when present).
 
 If multiple answers exist → use a one-line lead-in if helpful, then bullets for distinct points. Prefer bullets over one dense paragraph when comparing options or listing details.
 
@@ -484,7 +541,7 @@ RECENT CONVERSATION (if present above):
 
 FORWARD TO SUPPORT (order / account / human actions only):
 - Use this flow ONLY when the user needs a human for their order, account, refund/return on a purchase, shipping status, complaint about service, or similar—not when they asked a store-facts question and the answer was simply missing from the website data.
-- When the user needs something only a human can do (e.g. cancel my order, my order is late, where is my order, refund, return, complaint, account change, dispute), do NOT add [FORWARD_TO_SUPPORT] immediately. First ask for their name, email, and/or order ID (or whatever helps—e.g. "To help you, could you share your name, email, or order number?"). Once the user has provided at least one of these (name, email, or order/ref), reply with a short message like: "I've forwarded this to our support team. Please wait—our support agent will reply here soon." and at the very end of that reply add exactly this on a new line: [FORWARD_TO_SUPPORT]. This marker is removed from what the user sees; the conversation is then forwarded to your support email and a ticket is created. The customer will see support replies in this chat.
+- When the user needs something only a human can do (e.g. cancel my order, my order is late, refund, return, complaint, account change, dispute), tell them briefly that a contact form will appear below to send their details to the team. Do NOT ask them to type their email in the chat—the form collects name, email, order ref, and message. End your reply with exactly this on a new line: [FORWARD_TO_SUPPORT]. This marker is removed from what the user sees; a form is shown; after they submit, the conversation is emailed to support and they can get replies in this chat.
 - For normal product, catalog, price, or policy questions—including when the answer is "we don't have that detail in this chat"—do NOT add [FORWARD_TO_SUPPORT] and do not imply email forward/handoff.
 
 TONE: Professional, clear, helpful, business-aligned, confident.`;
@@ -515,27 +572,26 @@ ${websiteContext}
       try {
         const conn = await getDbConnection();
         const maxHistoryMessages = 14; // keep prompt small + focused
-        let rows: { role: "user" | "assistant"; content: string }[] = [];
+        let rows: { role: string; content: string }[] = [];
         if (userMsgId) {
           const [r] = await conn.execute(
             "SELECT role, content FROM chat_messages WHERE conversation_id = ? AND id <> ? ORDER BY created_at DESC LIMIT ?",
             [conversationId, userMsgId, maxHistoryMessages]
           );
-          rows = (r as { role: "user" | "assistant"; content: string }[]) || [];
+          rows = (r as { role: string; content: string }[]) || [];
         } else {
           const [r] = await conn.execute(
             "SELECT role, content FROM chat_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?",
             [conversationId, maxHistoryMessages]
           );
-          rows = (r as { role: "user" | "assistant"; content: string }[]) || [];
+          rows = (r as { role: string; content: string }[]) || [];
         }
         await conn.end();
 
-        // We selected DESC for speed; reverse to chronological.
-        rows
-          .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim().length > 0)
-          .reverse()
-          .forEach((m) => historyMessages.push({ role: m.role, content: m.content.trim().slice(0, 2000) }));
+        rows.reverse().forEach((m) => {
+          const mapped = toOpenAIHistoryMessages([m]);
+          if (mapped[0]) historyMessages.push(mapped[0]);
+        });
       } catch {
         /* ignore memory fetch errors */
       }
@@ -578,88 +634,25 @@ ${websiteContext}
           [assistantMsgId, conversationId, assistantContent]
         );
         if (hasForwardMarker && botUserId) {
-          const [existingFwd] = await conn.execute(
-            "SELECT id FROM forwarded_conversations WHERE conversation_id = ? LIMIT 1",
+          const [msgRows] = await conn.execute(
+            "SELECT role, content FROM chat_messages WHERE conversation_id = ? ORDER BY created_at ASC",
             [conversationId]
           );
-          const alreadyForwarded = Array.isArray(existingFwd) && existingFwd.length > 0;
-          if (!alreadyForwarded) {
-            const [msgRows] = await conn.execute(
-              "SELECT role, content FROM chat_messages WHERE conversation_id = ? ORDER BY created_at ASC",
-              [conversationId]
-            );
-            const msgs = (msgRows as { role: string; content: string }[]) || [];
-            const conversationText = msgs
-              .map((m) => `${m.role === "user" ? "Customer" : "Assistant"}: ${m.content}`)
-              .join("\n");
-            const lastUser = [...msgs].reverse().find((m) => m.role === "user");
-            const preview = (lastUser?.content || question || "Conversation").slice(0, 500);
-            const customerEmail = extractFirstEmailFromMessages(msgs);
-            const customer = customerEmail
-              ? (customerEmail.split("@")[0] || "Chat user").replace(/[._-]+/g, " ").trim() || "Chat user"
-              : "Chat user";
-            const ticketId = randomUUID();
-            const ticketRefVal = "TK-" + ticketId.slice(0, 8).toUpperCase();
-            ticketRef = ticketRefVal;
-            supportJustForwarded = true;
-            await conn.execute(
-              `INSERT INTO tickets (id, user_id, conversation_id, ticket_ref, type, customer, query_preview, status)
-                     VALUES (?, ?, ?, ?, 'forwarded_email', ?, ?, 'open')`,
-              [ticketId, botUserId, conversationId, ticketRefVal, customer, preview]
-            );
-            await conn.execute(
-              `INSERT INTO forwarded_conversations (id, user_id, conversation_id, customer, customer_email, preview, forwarded_as, ticket_ref)
-                     VALUES (?, ?, ?, ?, ?, ?, 'email', ?)`,
-              [randomUUID(), botUserId, conversationId, customer, customerEmail, preview, ticketRefVal]
-            );
-            const [userRows] = await conn.execute("SELECT forward_email FROM users WHERE id = ?", [botUserId]);
-            const forwardEmail = (userRows as { forward_email?: string }[])[0]?.forward_email ?? null;
-            if (forwardEmail && process.env.RESEND_API_KEY) {
-              const emailBody = [
-                "Forwarded conversation (AI could not handle — needs human support)",
-                `Ticket: #${ticketRefVal}`,
-                `Customer: ${customer}`,
-                "",
-                `Preview: ${preview}`,
-                "",
-                conversationText ? `Full conversation:\n${conversationText}` : "",
-              ]
-                .filter(Boolean)
-                .join("\n");
-              const subject = `Forwarded Ticket #${ticketRefVal} [conv:${conversationId}] ${preview.slice(0, 40)}${
-                preview.length > 40 ? "…" : ""
-              }`;
-              const resendAbort = new AbortController();
-              const resendTimeout = setTimeout(() => resendAbort.abort(), 60_000);
-              try {
-                const res = await fetch("https://api.resend.com/emails", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-                  },
-                  body: JSON.stringify({
-                    from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-                    to: forwardEmail,
-                    subject,
-                    text: emailBody,
-                  }),
-                  signal: resendAbort.signal,
-                });
-                clearTimeout(resendTimeout);
-                if (!res.ok) {
-                  const err = await res.json().catch(() => ({}));
-                  console.error("Resend send failed:", res.status, err);
-                }
-              } catch (e) {
-                clearTimeout(resendTimeout);
-                console.error("Resend send failed:", e);
-              }
-            } else if (forwardEmail) {
-              console.log("[Forward to email] Forward email set; RESEND_API_KEY missing — email not sent.");
-            }
-          }
-          await conn.execute("UPDATE conversations SET status = 'forwarded' WHERE id = ?", [conversationId]);
+          const msgs = (msgRows as { role: string; content: string }[]) || [];
+          const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+          const preview = (lastUser?.content || question || "Conversation").slice(0, 500);
+          const customerEmail = extractFirstEmailFromMessages(msgs);
+          const customer = customerEmail
+            ? (customerEmail.split("@")[0] || "Chat user").replace(/[._-]+/g, " ").trim() || "Chat user"
+            : "Chat user";
+          const pending = await createPendingForwardFromChat(conn, {
+            userId: botUserId,
+            conversationId,
+            customer,
+            preview,
+          });
+          ticketRef = pending.ticketRef;
+          supportJustForwarded = true;
         } else {
           await conn.execute(
             "UPDATE tickets SET status = 'resolved', outcome = 'Resolved by AI' WHERE conversation_id = ?",
@@ -698,13 +691,16 @@ ${websiteContext}
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Expose-Headers": "X-Conversation-Id, X-Ticket-Ref, X-Forwarded-Support, X-Forwarded-At",
+      "Access-Control-Expose-Headers":
+        "X-Conversation-Id, X-Ticket-Ref, X-Handoff-Mode, X-Forwarded-Support, X-Forwarded-At, X-Needs-Forward-Form",
     };
     if (conversationId) headers["X-Conversation-Id"] = conversationId;
     if (ticketRef) headers["X-Ticket-Ref"] = ticketRef;
+    headers["X-Handoff-Mode"] = "ai";
     if (supportJustForwarded) {
       headers["X-Forwarded-Support"] = "1";
       headers["X-Forwarded-At"] = new Date().toISOString();
+      headers["X-Needs-Forward-Form"] = "1";
     }
 
     return new Response(stream, { headers });

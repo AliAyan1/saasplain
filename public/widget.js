@@ -22,11 +22,16 @@
   var lastSupportReplyShown = null;
   var supportReplyPollTimer = null;
   var waitNoticeLock = false;
+  var showForwardForm = false;
+  var forwardFormSubmitted = false;
+  var FORWARD_MARKER = "[FORWARD_TO_SUPPORT]";
+  var lastThreadFingerprint = "";
+  var widgetHandoffMode = "ai";
   var SUPPORT_WAIT_TEXT =
     "No one is available in chat right this moment. Your request has been sent to our team—they will follow up with you by email when they respond. Feel free to ask anything else here in the meantime.";
 
   var styles =
-    ".ecom-widget-btn{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;border:none;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,0.4);z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:0;}.ecom-widget-btn:hover{opacity:0.95;}.ecom-widget-btn svg{display:block;flex-shrink:0;}.ecom-widget-panel{position:fixed;bottom:86px;right:20px;width:380px;max-width:calc(100vw - 40px);height:420px;max-height:70vh;background:#1e293b;border:1px solid #334155;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,0.4);display:flex;flex-direction:column;z-index:2147483645;font-family:system-ui,-apple-system,sans-serif;color-scheme:dark;}.ecom-widget-panel.hidden{display:none;}.ecom-widget-head{flex-shrink:0;padding:10px 12px;border-bottom:1px solid #334155;font-weight:600;font-size:15px;color:#f1f5f9;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:10px;}.ecom-widget-head img{width:22px;height:22px;border-radius:6px;object-fit:contain;background:rgba(15,23,42,0.5);flex-shrink:0;}.ecom-widget-head .ecom-widget-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.ecom-widget-messages{flex:1;min-height:0;overflow-y:auto;padding:12px;}.ecom-widget-msg{margin-bottom:10px;padding:10px 12px;border-radius:12px;font-size:14px;line-height:1.4;}.ecom-widget-msg.user{background:#334155;color:#f1f5f9;margin-left:24px;}.ecom-widget-msg.assistant{background:#0f172a;color:#e2e8f0;margin-right:24px;}.ecom-widget-msg.note{background:#1e1b4b;color:#e0e7ff;margin-right:24px;border:1px solid #3730a3;font-size:13px;}.ecom-widget-msg.note .ecom-widget-note-h{font-size:11px;font-weight:600;color:#a5b4fc;margin-bottom:6px;}.ecom-widget-form{display:flex;gap:8px;padding:12px;border-top:1px solid #334155;}.ecom-widget-input{flex:1;padding:10px 14px;border:1px solid #475569;border-radius:10px;background:#0f172a;color:#f1f5f9;font-size:14px;outline:none;}.ecom-widget-input::placeholder{color:#94a3b8;opacity:1;}.ecom-widget-input:focus{border-color:#f97316;}.ecom-widget-send{padding:10px 16px;border:none;border-radius:10px;background:#f97316;color:#fff;font-weight:600;cursor:pointer;font-size:14px;}.ecom-widget-send:hover{opacity:0.9;}.ecom-widget-send:disabled{opacity:0.5;cursor:not-allowed;}.ecom-widget-powered{flex-shrink:0;padding:6px 12px 8px;border-top:1px solid #334155;font-size:11px;color:#64748b;text-align:center;}";
+    ".ecom-widget-btn{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;border:none;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,0.4);z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:0;}.ecom-widget-btn:hover{opacity:0.95;}.ecom-widget-btn svg{display:block;flex-shrink:0;}.ecom-widget-panel{position:fixed;bottom:86px;right:20px;width:380px;max-width:calc(100vw - 40px);height:420px;max-height:70vh;background:#1e293b;border:1px solid #334155;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,0.4);display:flex;flex-direction:column;z-index:2147483645;font-family:system-ui,-apple-system,sans-serif;color-scheme:dark;}.ecom-widget-panel.hidden{display:none;}.ecom-widget-head{flex-shrink:0;padding:10px 12px;border-bottom:1px solid #334155;font-weight:600;font-size:15px;color:#f1f5f9;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:10px;}.ecom-widget-head img{width:22px;height:22px;border-radius:6px;object-fit:contain;background:rgba(15,23,42,0.5);flex-shrink:0;}.ecom-widget-head .ecom-widget-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.ecom-widget-messages{flex:1;min-height:0;overflow-y:auto;padding:12px;}.ecom-widget-msg{margin-bottom:10px;padding:10px 12px;border-radius:12px;font-size:14px;line-height:1.4;}.ecom-widget-msg.user{background:#334155;color:#f1f5f9;margin-left:24px;}.ecom-widget-msg.assistant{background:#0f172a;color:#e2e8f0;margin-right:24px;}.ecom-widget-msg.note{background:#1e1b4b;color:#e0e7ff;margin-right:24px;border:1px solid #3730a3;font-size:13px;}.ecom-widget-msg.note .ecom-widget-note-h{font-size:11px;font-weight:600;color:#a5b4fc;margin-bottom:6px;}.ecom-widget-form{display:flex;gap:8px;padding:12px;border-top:1px solid #334155;}.ecom-widget-input{flex:1;padding:10px 14px;border:1px solid #475569;border-radius:10px;background:#0f172a;color:#f1f5f9;font-size:14px;outline:none;}.ecom-widget-input::placeholder{color:#94a3b8;opacity:1;}.ecom-widget-input:focus{border-color:#f97316;}.ecom-widget-send{padding:10px 16px;border:none;border-radius:10px;background:#f97316;color:#fff;font-weight:600;cursor:pointer;font-size:14px;}.ecom-widget-send:hover{opacity:0.9;}.ecom-widget-send:disabled{opacity:0.5;cursor:not-allowed;}.ecom-widget-powered{flex-shrink:0;padding:6px 12px 8px;border-top:1px solid #334155;font-size:11px;color:#64748b;text-align:center;}.ecom-widget-forward{display:none;flex-shrink:0;padding:10px 12px;border-top:1px solid #334155;background:#0f172a;}.ecom-widget-forward.visible{display:block;}.ecom-widget-forward h4{margin:0 0 4px;font-size:13px;font-weight:600;color:#f1f5f9;}.ecom-widget-forward p{margin:0 0 8px;font-size:11px;color:#94a3b8;}.ecom-widget-forward input,.ecom-widget-forward textarea{width:100%;box-sizing:border-box;margin-bottom:8px;padding:8px 10px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#f1f5f9;font-size:13px;font-family:inherit;}.ecom-widget-forward textarea{resize:vertical;min-height:52px;}.ecom-widget-forward-btns{display:flex;gap:8px;}.ecom-widget-forward-btns button{padding:8px 12px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;}.ecom-widget-forward-submit{background:#f97316;color:#fff;}.ecom-widget-forward-submit:disabled{opacity:0.5;cursor:not-allowed;}.ecom-widget-forward-cancel{background:transparent;color:#94a3b8;}";
 
   function parseHex(hex) {
     var h = (hex || "").replace(/^#/, "");
@@ -133,6 +138,44 @@
     head.appendChild(titleSpan);
     var messagesDiv = document.createElement("div");
     messagesDiv.className = "ecom-widget-messages";
+    var forwardBlock = document.createElement("div");
+    forwardBlock.className = "ecom-widget-forward";
+    var fwdTitle = document.createElement("h4");
+    fwdTitle.textContent = "Contact our team";
+    var fwdHint = document.createElement("p");
+    fwdHint.textContent = "We'll email your details and full chat to support.";
+    var fwdName = document.createElement("input");
+    fwdName.type = "text";
+    fwdName.placeholder = "Your name";
+    var fwdEmail = document.createElement("input");
+    fwdEmail.type = "email";
+    fwdEmail.placeholder = "Your email *";
+    fwdEmail.required = true;
+    var fwdOrder = document.createElement("input");
+    fwdOrder.type = "text";
+    fwdOrder.placeholder = "Order number (optional)";
+    var fwdMsg = document.createElement("textarea");
+    fwdMsg.placeholder = "How can we help? (optional)";
+    fwdMsg.rows = 2;
+    var fwdBtns = document.createElement("div");
+    fwdBtns.className = "ecom-widget-forward-btns";
+    var fwdSubmit = document.createElement("button");
+    fwdSubmit.type = "button";
+    fwdSubmit.className = "ecom-widget-forward-submit";
+    fwdSubmit.textContent = "Send to support";
+    var fwdCancel = document.createElement("button");
+    fwdCancel.type = "button";
+    fwdCancel.className = "ecom-widget-forward-cancel";
+    fwdCancel.textContent = "Cancel";
+    fwdBtns.appendChild(fwdSubmit);
+    fwdBtns.appendChild(fwdCancel);
+    forwardBlock.appendChild(fwdTitle);
+    forwardBlock.appendChild(fwdHint);
+    forwardBlock.appendChild(fwdName);
+    forwardBlock.appendChild(fwdEmail);
+    forwardBlock.appendChild(fwdOrder);
+    forwardBlock.appendChild(fwdMsg);
+    forwardBlock.appendChild(fwdBtns);
     var form = document.createElement("form");
     form.className = "ecom-widget-form";
     var input = document.createElement("input");
@@ -148,6 +191,7 @@
     form.appendChild(send);
     panel.appendChild(head);
     panel.appendChild(messagesDiv);
+    panel.appendChild(forwardBlock);
     panel.appendChild(form);
     if (cfg.showPoweredBy === true) {
       var powered = document.createElement("div");
@@ -164,6 +208,78 @@
     input.style.setProperty("caret-color", "#f1f5f9", "important");
 
     applyWidgetAccent(accentHex, btn, send, input);
+    applyWidgetAccent(accentHex, null, fwdSubmit, null);
+
+    function setForwardFormVisible(visible) {
+      showForwardForm = visible;
+      if (visible) forwardBlock.classList.add("visible");
+      else forwardBlock.classList.remove("visible");
+    }
+
+    function collectConversationTextFromDom() {
+      var lines = [];
+      messagesDiv.querySelectorAll(".ecom-widget-msg").forEach(function (el) {
+        var role = el.classList.contains("user") ? "Customer" : "Assistant";
+        var t = (el.textContent || "").trim();
+        if (t && t !== "…") lines.push(role + ": " + t);
+      });
+      return lines.join("\n");
+    }
+
+    function submitForwardForm() {
+      if (!conversationId || forwardFormSubmitted) return;
+      var email = (fwdEmail.value || "").trim();
+      if (!email) {
+        fwdEmail.focus();
+        return;
+      }
+      fwdSubmit.disabled = true;
+      var payload = {
+        chatbotId: botId,
+        conversationId: conversationId,
+        customer: (fwdName.value || "").trim() || "Customer",
+        customerEmail: email,
+        orderRef: (fwdOrder.value || "").trim() || null,
+        customerMessage: (fwdMsg.value || "").trim() || null,
+        preview: (fwdMsg.value || "").trim() || "Support request",
+        conversationText: collectConversationTextFromDom(),
+      };
+      fetch(base + "/api/forwarded/submit", {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then(function (r) {
+          return r.json().then(function (data) {
+            if (!r.ok) throw new Error(data.error || "Failed to send");
+            return data;
+          });
+        })
+        .then(function () {
+          forwardFormSubmitted = true;
+          setForwardFormVisible(false);
+          fwdName.value = "";
+          fwdEmail.value = "";
+          fwdOrder.value = "";
+          fwdMsg.value = "";
+          addAssistantMessage(
+            "Thanks — we've sent your details to our team. You'll see their reply here when they respond."
+          );
+          if (open) startSupportReplyPoll();
+        })
+        .catch(function () {
+          addAssistantMessage("Sorry, we couldn't send your form. Please try again.");
+        })
+        .finally(function () {
+          fwdSubmit.disabled = false;
+        });
+    }
+
+    fwdSubmit.onclick = submitForwardForm;
+    fwdCancel.onclick = function () {
+      setForwardFormVisible(false);
+    };
 
     function escapeHtmlW(s) {
       return String(s)
@@ -174,6 +290,15 @@
     }
     function linkifyForWidget(raw) {
       var e = escapeHtmlW(raw);
+      e = e.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, function (_, label, href) {
+        return (
+          '<a href="' +
+          href +
+          '" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:underline;word-break:break-all;">' +
+          label +
+          "</a>"
+        );
+      });
       return e.replace(/(https?:\/\/[^\s<]+?)(?=[\s<]|$)/g, function (u) {
         var href = u.replace(/[.,;:!?)\]']+$/g, "");
         return (
@@ -197,7 +322,7 @@
     function addAssistantMessage(content) {
       var p = document.createElement("p");
       p.className = "ecom-widget-msg assistant";
-      if (content && String(content).indexOf("http") >= 0) {
+      if (content && (String(content).indexOf("http") >= 0 || /\[[^\]]+\]\(https?:/.test(String(content)))) {
         p.innerHTML = linkifyForWidget(content);
       } else {
         p.textContent = content;
@@ -222,16 +347,15 @@
         })
         .then(function (data) {
           if (!data || !Array.isArray(data.messages) || data.messages.length === 0) return;
-          messagesDiv.innerHTML = "";
-          data.messages.forEach(function (m) {
-            if (m.role === "user") addMsg("user", m.content || "");
-            else addAssistantMessage(m.content || "");
-          });
+          lastThreadFingerprint = data.messages.map(function (m) { return m.id; }).join("|");
+          renderThreadFromServer(data.messages, data.handoffMode);
           pollSupportReply();
+          checkForwardFormState();
         })
         .catch(function () {});
     }
     hydrateThreadFromServer();
+    checkForwardFormState();
 
     function addNoteMsg(text) {
       var wrap = document.createElement("div");
@@ -247,12 +371,65 @@
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
+    function checkForwardFormState() {
+      if (!conversationId || forwardFormSubmitted) return;
+      fetch(base + "/api/forwarded/by-conversation?conversationId=" + encodeURIComponent(conversationId), {
+        method: "GET",
+        mode: "cors",
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (data.needsForm) setForwardFormVisible(true);
+        })
+        .catch(function () {});
+    }
+
+    function renderThreadFromServer(messages, handoff) {
+      if (handoff === "human" || handoff === "ai") widgetHandoffMode = handoff;
+      messagesDiv.innerHTML = "";
+      (messages || []).forEach(function (m) {
+        if (m.role === "user") addMsg("user", m.content || "");
+        else if (m.role === "agent") addMsg("assistant", "Support: " + (m.content || ""));
+        else addAssistantMessage(m.content || "");
+      });
+    }
+
+    function syncThreadMessages() {
+      if (!conversationId || send.disabled) return;
+      fetch(
+        base +
+          "/api/conversations/messages?conversationId=" +
+          encodeURIComponent(conversationId) +
+          "&chatbotId=" +
+          encodeURIComponent(botId),
+        { method: "GET", mode: "cors" }
+      )
+        .then(function (r) {
+          if (!r.ok) return null;
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data || !Array.isArray(data.messages)) return;
+          var fp = data.messages.map(function (m) { return m.id; }).join("|");
+          if (fp === lastThreadFingerprint) return;
+          lastThreadFingerprint = fp;
+          renderThreadFromServer(data.messages, data.handoffMode);
+        })
+        .catch(function () {});
+    }
+
     function pollSupportReply() {
       if (!conversationId || !open) return;
+      syncThreadMessages();
       var waitKey = "plainbot-wait-2m:" + botId + ":" + conversationId;
       fetch(base + "/api/forwarded/by-conversation?conversationId=" + encodeURIComponent(conversationId), { method: "GET", mode: "cors" })
         .then(function (r) { return r.json(); })
         .then(function (data) {
+          if (data.needsForm && !forwardFormSubmitted) {
+            setForwardFormVisible(true);
+          }
           if (data.replyText && data.replyText !== lastSupportReplyShown) {
             lastSupportReplyShown = data.replyText;
             addMsg("assistant", "Support: " + data.replyText);
@@ -278,7 +455,7 @@
     function startSupportReplyPoll() {
       if (supportReplyPollTimer) return;
       pollSupportReply();
-      supportReplyPollTimer = setInterval(pollSupportReply, 15000);
+      supportReplyPollTimer = setInterval(pollSupportReply, 3000);
     }
     function stopSupportReplyPoll() {
       if (supportReplyPollTimer) {
@@ -300,6 +477,7 @@
       if (conversationId) body.conversationId = conversationId;
 
       var chatUrl = base + "/api/chat";
+      var needsForwardFromHeader = false;
       fetch(chatUrl, {
         method: "POST",
         mode: "cors",
@@ -307,6 +485,9 @@
         body: JSON.stringify(body),
       })
         .then(function (res) {
+          needsForwardFromHeader =
+            res.headers.get("X-Needs-Forward-Form") === "1" ||
+            res.headers.get("X-Forwarded-Support") === "1";
           var cid = res.headers.get("X-Conversation-Id");
           if (cid) {
             conversationId = cid;
@@ -344,12 +525,16 @@
             reader.read().then(function (r) {
               if (r.done) {
                 if (last && streamBuf) {
-                  last.innerHTML = linkifyForWidget(streamBuf);
+                  var showFwd =
+                    needsForwardFromHeader || streamBuf.indexOf(FORWARD_MARKER) >= 0;
+                  var cleaned = streamBuf.replace(/\s*\[FORWARD_TO_SUPPORT\]\s*$/i, "").trim();
+                  last.innerHTML = linkifyForWidget(cleaned || streamBuf);
+                  if (showFwd && !forwardFormSubmitted) setForwardFormVisible(true);
                 }
                 send.disabled = false;
-                if (conversationId && open) {
-                  startSupportReplyPoll();
-                  pollSupportReply();
+                if (conversationId) {
+                  if (open) startSupportReplyPoll();
+                  setTimeout(syncThreadMessages, 400);
                 }
                 return;
               }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbConnection } from "@/lib/db";
 import { getAuthFromCookie } from "@/lib/auth";
-import { randomUUID } from "crypto";
+import { submitForwardToSupport } from "@/lib/forward-to-support";
 
 export async function GET(req: NextRequest) {
   try {
@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
     const customer = typeof body.customer === "string" ? body.customer.trim() : "Customer";
     const customerEmail = typeof body.customerEmail === "string" ? body.customerEmail.trim() : null;
     const orderRef = typeof body.orderRef === "string" ? body.orderRef.trim() : null;
+    const customerMessage = typeof body.customerMessage === "string" ? body.customerMessage.trim() : null;
     const preview = typeof body.preview === "string" ? body.preview.trim() : "";
     const conversationText = typeof body.conversationText === "string" ? body.conversationText.trim() : "";
 
@@ -100,99 +101,30 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!customerEmail) {
+      return NextResponse.json({ error: "customerEmail is required" }, { status: 400 });
+    }
 
     const conn = await getDbConnection();
-    const [existing] = await conn.execute(
-      "SELECT id FROM forwarded_conversations WHERE conversation_id = ? AND user_id = ? LIMIT 1",
-      [conversationId, auth.userId]
-    );
-    const existingRow = Array.isArray(existing) && existing.length > 0 ? (existing[0] as { id: string }) : null;
-    const id = existingRow?.id ?? randomUUID();
-    if (!existingRow) {
-      await conn.execute(
-        `INSERT INTO forwarded_conversations (id, user_id, conversation_id, customer, customer_email, preview, forwarded_as, ticket_ref)
-         VALUES (?, ?, ?, ?, ?, ?, 'email', ?)`,
-        [id, auth.userId, conversationId, customer, customerEmail || null, preview, orderRef || null]
-      );
-    }
-
-    let forwardEmail: string | null = null;
-    try {
-      const [userRows] = await conn.execute(
-        "SELECT forward_email FROM users WHERE id = ?",
-        [auth.userId]
-      );
-      const ur = (userRows as { forward_email?: string }[])[0];
-      forwardEmail = ur?.forward_email ?? null;
-    } catch {
-      // column may not exist before migration
-    }
-
-    if (!existingRow && forwardEmail) {
-      let ticketRefForEmail: string | null = null;
-      try {
-        const [ticketRows] = await conn.execute(
-          "SELECT ticket_ref FROM tickets WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
-          [conversationId]
-        );
-        const tr = (ticketRows as { ticket_ref: string }[])[0];
-        if (tr) ticketRefForEmail = tr.ticket_ref;
-      } catch {
-        /* ignore */
-      }
-      const emailBody = [
-        `Forwarded conversation`,
-        ticketRefForEmail ? `Ticket: #${ticketRefForEmail}` : "",
-        `Customer: ${customer}`,
-        customerEmail ? `Email: ${customerEmail}` : "",
-        orderRef ? `Order/Ref: ${orderRef}` : "",
-        ``,
-        `Preview: ${preview}`,
-        ``,
-        conversationText ? `Full conversation:\n${conversationText}` : "",
-      ].filter(Boolean).join("\n");
-      // Ticket # so support sees it; [conv:...] so inbound webhook can match the reply
-      const subject = ticketRefForEmail
-        ? `Forwarded Ticket #${ticketRefForEmail} [conv:${conversationId}] ${preview.slice(0, 40)}${preview.length > 40 ? "…" : ""}`
-        : `Forwarded [conv:${conversationId}] ${preview.slice(0, 50)}${preview.length > 50 ? "…" : ""}`;
-      if (process.env.RESEND_API_KEY) {
-        try {
-          const resendAbort = new AbortController();
-          const resendTimeout = setTimeout(() => resendAbort.abort(), 60_000);
-          const res = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            },
-            body: JSON.stringify({
-              from: process.env.EMAIL_FROM || "onboarding@resend.dev",
-              to: forwardEmail,
-              subject,
-              text: emailBody,
-            }),
-            signal: resendAbort.signal,
-          });
-          clearTimeout(resendTimeout);
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            console.error("Resend send failed:", res.status, err);
-          }
-        } catch (e) {
-          console.error("Resend send failed:", e);
-        }
-      } else {
-        console.log("[Forward to email] Forward email set; RESEND_API_KEY missing — email not sent.");
-      }
-    }
-
-    await conn.execute(
-      "UPDATE conversations SET status = 'forwarded' WHERE id = ?",
-      [conversationId]
-    );
+    const result = await submitForwardToSupport(conn, {
+      userId: auth.userId,
+      conversationId,
+      customer,
+      customerEmail,
+      orderRef,
+      customerMessage,
+      preview,
+      conversationText,
+    });
     await conn.end();
 
-    return NextResponse.json({ ok: true, id });
+    return NextResponse.json({
+      ok: true,
+      id: result.id,
+      ticketRef: result.ticketRef,
+      emailSent: result.emailSent,
+      alreadySubmitted: result.alreadySubmitted,
+    });
   } catch (err) {
     console.error("Forwarded create error:", err);
     return NextResponse.json({ error: "Failed to forward" }, { status: 500 });
