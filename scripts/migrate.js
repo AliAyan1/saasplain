@@ -504,6 +504,26 @@ async function run() {
       console.log("chat_messages.role already includes agent, skip.");
     }
 
+    // Agent notification sound preferences
+    if (!(await hasColumn(conn, "users", "notify_sound_new_conversation"))) {
+      console.log("Adding users.notify_sound_new_conversation...");
+      await conn.execute(
+        "ALTER TABLE users ADD COLUMN notify_sound_new_conversation TINYINT(1) NOT NULL DEFAULT 1"
+      );
+      console.log("  OK");
+    } else {
+      console.log("users.notify_sound_new_conversation already exists, skip.");
+    }
+    if (!(await hasColumn(conn, "users", "notify_sound_ongoing_message"))) {
+      console.log("Adding users.notify_sound_ongoing_message...");
+      await conn.execute(
+        "ALTER TABLE users ADD COLUMN notify_sound_ongoing_message TINYINT(1) NOT NULL DEFAULT 0"
+      );
+      console.log("  OK");
+    } else {
+      console.log("users.notify_sound_ongoing_message already exists, skip.");
+    }
+
     console.log("\nMigrations finished.");
   } finally {
     await conn.end();

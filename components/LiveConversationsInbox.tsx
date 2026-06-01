@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
 import { useBot } from "@/components/BotContext";
+import { useAgentNotificationSounds } from "@/hooks/useAgentNotificationSounds";
+import type { NotificationSoundPrefs } from "@/lib/agent-notification-sounds";
+import { isAgentAudioUnlocked } from "@/lib/agent-notification-sounds";
 
 type ConversationRow = {
   id: string;
@@ -16,6 +19,8 @@ type ConversationRow = {
   isLive: boolean;
   lastMessageRole: string | null;
   messageCount: number;
+  lastUserMessageId: string | null;
+  userMessageCount: number;
 };
 
 type ChatMsg = {
@@ -61,8 +66,40 @@ export default function LiveConversationsInbox() {
   const [agentInput, setAgentInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [soundPrefs, setSoundPrefs] = useState<NotificationSoundPrefs | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
   const lastSinceRef = useRef<string>("");
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    fetch("/api/users/notification-sounds")
+      .then((r) => r.json())
+      .then((data: NotificationSoundPrefs) => {
+        setSoundPrefs({
+          newConversation: Boolean(data.newConversation),
+          ongoingMessage: Boolean(data.ongoingMessage),
+        });
+      })
+      .catch(() => setSoundPrefs({ newConversation: true, ongoingMessage: false }));
+  }, []);
+
+  useEffect(() => {
+    const check = () => setAudioReady(isAgentAudioUnlocked());
+    check();
+    const t = window.setInterval(check, 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useAgentNotificationSounds(
+    conversations.map((c) => ({
+      id: c.id,
+      lastUserMessageId: c.lastUserMessageId,
+      userMessageCount: c.userMessageCount,
+    })),
+    soundPrefs,
+    Boolean(chatbotId && audioReady && soundPrefs),
+    chatbotId
+  );
 
   const loadList = useCallback(() => {
     const q = chatbotId ? `?chatbotId=${encodeURIComponent(chatbotId)}` : "";
@@ -246,6 +283,9 @@ export default function LiveConversationsInbox() {
         <div className="border-b border-slate-700/80 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Inbox</p>
           <p className="text-sm text-slate-400">Updates every 5s · live = activity in last 3 min</p>
+          {!audioReady && (
+            <p className="mt-1 text-[11px] text-amber-400/90">Click anywhere on the page to enable sound alerts.</p>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {loadingList && conversations.length === 0 ? (

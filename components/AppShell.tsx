@@ -2,6 +2,7 @@
 
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
+import AgentAudioUnlock from "./AgentAudioUnlock";
 import { AppShellProvider, useAppShell } from "./AppShellContext";
 import { usePathname } from "next/navigation";
 
@@ -41,6 +42,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AppShellProvider sidebarVisible={sidebarVisible}>
       <div className="min-h-screen bg-black">
+        <AgentAudioUnlock />
         <AppShellInner hideSidebar={hideSidebar}>{children}</AppShellInner>
       </div>
     </AppShellProvider>

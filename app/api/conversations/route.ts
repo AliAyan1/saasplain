@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
        (SELECT content FROM chat_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS lastMessage,
        (SELECT role FROM chat_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS lastMessageRole,
        (SELECT created_at FROM chat_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS lastMessageAt,
-       (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id) AS messageCount
+       (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id) AS messageCount,
+       (SELECT id FROM chat_messages WHERE conversation_id = c.id AND role = 'user' ORDER BY created_at DESC LIMIT 1) AS lastUserMessageId,
+       (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id AND role = 'user') AS userMessageCount
        FROM conversations c
        INNER JOIN chatbots b ON b.id = c.chatbot_id AND b.user_id = ?${botFilter}
        ORDER BY COALESCE(
@@ -60,6 +62,8 @@ export async function GET(req: NextRequest) {
         lastMessageRole: string | null;
         lastMessageAt: Date | null;
         messageCount: number;
+        lastUserMessageId: string | null;
+        userMessageCount: number;
       }[]
     ).map((r) => {
       const lastAt = r.lastMessageAt ? new Date(r.lastMessageAt).getTime() : 0;
@@ -75,6 +79,8 @@ export async function GET(req: NextRequest) {
         isLive,
         lastMessageRole: r.lastMessageRole,
         messageCount: Number(r.messageCount) || 0,
+        lastUserMessageId: r.lastUserMessageId ?? null,
+        userMessageCount: Number(r.userMessageCount) || 0,
       };
     });
 

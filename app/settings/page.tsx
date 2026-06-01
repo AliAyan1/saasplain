@@ -14,6 +14,7 @@ import {
   storeLimitForPlan,
   UNLIMITED_CONVERSATIONS_DISPLAY,
 } from "@/lib/plans";
+import { playTestNotificationSound, unlockAgentNotificationAudio } from "@/lib/agent-notification-sounds";
 
 const PERSONALITIES = ["Friendly", "Professional", "Sales-focused", "Premium Luxury"] as const;
 
@@ -64,6 +65,52 @@ export default function SettingsPage() {
 
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const [notifyNewConversation, setNotifyNewConversation] = useState(true);
+  const [notifyOngoingMessage, setNotifyOngoingMessage] = useState(false);
+  const [notifySaving, setNotifySaving] = useState(false);
+  const [notifyMessage, setNotifyMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/users/notification-sounds")
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.newConversation === "boolean") setNotifyNewConversation(data.newConversation);
+        if (typeof data.ongoingMessage === "boolean") setNotifyOngoingMessage(data.ongoingMessage);
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveNotificationSounds = async (next: {
+    newConversation?: boolean;
+    ongoingMessage?: boolean;
+  }) => {
+    setNotifySaving(true);
+    setNotifyMessage(null);
+    const body = {
+      newConversation: next.newConversation ?? notifyNewConversation,
+      ongoingMessage: next.ongoingMessage ?? notifyOngoingMessage,
+    };
+    try {
+      const res = await fetch("/api/users/notification-sounds", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      setNotifyNewConversation(Boolean(data.newConversation));
+      setNotifyOngoingMessage(Boolean(data.ongoingMessage));
+      setNotifyMessage({ type: "ok", text: "Notification settings saved." });
+    } catch (e: unknown) {
+      setNotifyMessage({
+        type: "error",
+        text: e instanceof Error ? e.message : "Failed to save",
+      });
+    } finally {
+      setNotifySaving(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/users/forward-email")
@@ -331,6 +378,82 @@ export default function SettingsPage() {
           {forwardEmailMessage && (
             <p className={`text-xs ${forwardEmailMessage.type === "ok" ? "text-emerald-400" : "text-red-400"}`}>
               {forwardEmailMessage.text}
+            </p>
+          )}
+        </Card>
+
+        {/* Notification sounds */}
+        <Card className="space-y-4">
+          <h2 className="text-sm font-semibold text-slate-200">Notification sounds</h2>
+          <p className="text-xs text-slate-500">
+            Play alerts on the Live conversations page when customers message you. Click anywhere in the app once
+            after login so your browser allows sound.
+          </p>
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-slate-600"
+              checked={notifyNewConversation}
+              disabled={notifySaving}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setNotifyNewConversation(v);
+                void saveNotificationSounds({ newConversation: v });
+              }}
+            />
+            <span>
+              <span className="font-medium">New conversation notifications</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Sound when a customer starts a new chat (first message only).
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-slate-600"
+              checked={notifyOngoingMessage}
+              disabled={notifySaving}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setNotifyOngoingMessage(v);
+                void saveNotificationSounds({ ongoingMessage: v });
+              }}
+            />
+            <span>
+              <span className="font-medium">Ongoing message notifications</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Sound for each new customer message in an existing chat.
+              </span>
+            </span>
+          </label>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="text-xs"
+              onClick={() => {
+                unlockAgentNotificationAudio();
+                playTestNotificationSound("new");
+              }}
+            >
+              Test new chat sound
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="text-xs"
+              onClick={() => {
+                unlockAgentNotificationAudio();
+                playTestNotificationSound("ongoing");
+              }}
+            >
+              Test ongoing sound
+            </Button>
+          </div>
+          {notifyMessage && (
+            <p className={`text-xs ${notifyMessage.type === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+              {notifyMessage.text}
             </p>
           )}
         </Card>
